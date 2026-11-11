@@ -4,7 +4,7 @@
 
 Zotero Feishu Sync is an unofficial Zotero plugin that publishes literature
 metadata, notes, images, and PDF attachments to Feishu cloud documents. This
-0.8.0-beta.1 fork also synchronizes PDF / HTML snapshot text annotations as
+0.8.0-beta.2 fork also synchronizes PDF / HTML snapshot text annotations as
 sentence-level comments in an existing English paper document. It uses the
 original plugin’s Feishu OAuth and API client directly. No CLI, Python, or
 bridge service is required.
@@ -62,7 +62,10 @@ Feishu account. Saving a highlight / underline queues a sync after 1.5 seconds
 (default). The plugin skips unchanged comments, updates the same root reply
 when source text changes, and uploads distinct annotations separately. On a
 new computer it discovers mapping notes and recovers comment IDs from Feishu
-provenance links.
+invisible provenance suffixes. The suffix is Unicode text, not a native Feishu
+metadata field, and may travel when copying a comment. Removing it during manual
+editing or export prevents recovery from that comment. Recovery does not depend
+on Syncthing or a shared local index. Existing visible suffixes migrate in place.
 
 If simultaneous first uploads create duplicates, all machines choose the
 smallest comment ID. Untouched duplicates without replies receive a canonical

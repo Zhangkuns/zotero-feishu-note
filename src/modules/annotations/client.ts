@@ -35,13 +35,50 @@ function escaped(text: string): string {
 export function commentText(text: string): string {
   return (text || "Zotero 高亮") + "\n";
 }
-const markerPrefix = "[Zotero Feishu Sync] ";
 const markerPattern =
   /\n\[Zotero Feishu Sync\] (https:\/\/www\.zotero\.org\/users\/(?:[0-9]+|local)\/items\/[A-Z0-9]{8}#zfs=[a-f0-9]+(?:&duplicate=[A-Za-z0-9_-]+)?)\n?$/;
+const hiddenPattern =
+  /\u2063\u2060\u2063([\uFE00-\uFE0F]+)\u2063\u2064\u2063(?=\n?$)/;
+const validSource =
+  /^https:\/\/www\.zotero\.org\/users\/(?:[0-9]+|local)\/items\/[A-Z0-9]{8}(?:#zfs=[a-f0-9]+(?:&duplicate=[A-Za-z0-9_-]+)?)?$/;
+export function hiddenMarker(marker: string): string {
+  requireValue(
+    marker.length <= 2048 && /^[\x20-\x7E]+$/.test(marker),
+    "invalid annotation source marker",
+  );
+  // Default-ignorable Unicode selectors carry the provenance without adding
+  // visible text. Delimiters keep selectors away from the last visible glyph.
+  return (
+    "\u2063\u2060\u2063" +
+    [...marker]
+      .map((c) =>
+        String.fromCharCode(
+          0xfe00 + (c.charCodeAt(0) >> 4),
+          0xfe00 + (c.charCodeAt(0) & 15),
+        ),
+      )
+      .join("") +
+    "\u2063\u2064\u2063"
+  );
+}
+function rawReplyText(reply: any): string {
+  return (reply.content?.elements || [])
+    .map((e: any) => e.text_run?.text || "")
+    .join("");
+}
+export function hiddenSourceMarker(reply: any): string | undefined {
+  const encoded = rawReplyText(reply).match(hiddenPattern)?.[1];
+  if (!encoded || encoded.length % 2 || encoded.length > 4096) return;
+  let decoded = "";
+  for (let i = 0; i < encoded.length; i += 2)
+    decoded += String.fromCharCode(
+      ((encoded.charCodeAt(i) - 0xfe00) << 4) |
+        (encoded.charCodeAt(i + 1) - 0xfe00),
+    );
+  return validSource.test(decoded) ? decoded : undefined;
+}
 export function createElements(text: string, marker: string): any[] {
-  // External provenance URLs are plain text: docs_link rejects these URLs in
-  // reply updates (1069302). Keep one strict trailing marker for recovery.
-  const raw = commentText(text) + markerPrefix + marker;
+  const raw = commentText(text).replace(/\n$/, hiddenMarker(marker) + "\n");
   requireValue([...raw].length <= 10000, "批注过长（飞书评论最多 10000 字符）");
   const chars = [...raw],
     elements: any[] = [];
@@ -56,20 +93,18 @@ export function createElements(text: string, marker: string): any[] {
   return elements;
 }
 export function replyText(reply: any): string {
-  return (reply.content?.elements || [])
-    .map((e: any) => e.text_run?.text || "")
-    .join("")
-    .replace(markerPattern, "\n");
+  const raw = rawReplyText(reply);
+  return (
+    hiddenSourceMarker(reply) ? raw.replace(hiddenPattern, "") : raw
+  ).replace(markerPattern, "\n");
 }
 export function sourceMarker(reply: any, key: string): string | undefined {
-  const text = (reply.content?.elements || [])
-    .map((e: any) => e.text_run?.text || "")
-    .join("");
+  const text = rawReplyText(reply);
   const marker = text.match(markerPattern)?.[1];
   const links = (reply.content?.elements || [])
     .map((e: any) => e.docs_link?.url)
     .filter((x: any) => typeof x === "string");
-  return [marker, ...links]
+  return [hiddenSourceMarker(reply), marker, ...links]
     .filter(Boolean)
     .find((url: string) =>
       new RegExp(

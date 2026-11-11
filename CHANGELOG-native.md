@@ -1,3 +1,11 @@
+# 0.8.0-beta.2
+
+- Replace the visible source suffix with invisible Unicode provenance text.
+- Migrate verified legacy comments in place while preserving comment/reply IDs.
+- Keep cross-computer recovery and duplicate reconciliation independent of Syncthing.
+- Cover split text runs, malformed metadata, legacy migration, and rendered width.
+- Document that copying may carry metadata and manual edits may strip it.
+
 # 0.8.0-beta.1
 
 - Reuse the original Feishu OAuth and API transport for mapped PDF / HTML annotations.

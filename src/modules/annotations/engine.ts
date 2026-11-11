@@ -4,6 +4,7 @@ import {
   type AnnotationClient,
   commentText,
   createElements,
+  hiddenSourceMarker,
   replyText,
   sourceMarker,
 } from "./client";
@@ -311,7 +312,10 @@ export class AnnotationEngine {
       "飞书评论被独立修改或旧版记录不可验证，未覆盖；请先核对这条评论",
     );
     record.replyId = root.reply_id;
-    const edited = current !== expected || oldMarker !== marker;
+    const edited =
+      current !== expected ||
+      oldMarker !== marker ||
+      hiddenSourceMarker(root) !== marker;
     if (edited) {
       check();
       await this.client.update(

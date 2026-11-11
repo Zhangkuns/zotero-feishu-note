@@ -1,6 +1,9 @@
 import { assert } from "chai";
 import { config } from "../package.json";
-import { FeishuAnnotationClient } from "../src/modules/annotations/client";
+import {
+  FeishuAnnotationClient,
+  hiddenMarker,
+} from "../src/modules/annotations/client";
 import {
   AnnotationStore,
   emptyAnnotationState,
@@ -41,7 +44,7 @@ describe("native annotation API and persistence", function () {
       } as any),
     );
 
-  it("creates with portable text provenance, updates the existing root, and patches a revision-bound selection", async function () {
+  it("creates with invisible provenance, updates the existing root, and patches a revision-bound selection", async function () {
     const requests: any[] = [];
     Zotero.HTTP.request = (async (method, url, options) => {
       requests.push({
@@ -73,7 +76,7 @@ describe("native annotation API and persistence", function () {
       reply_elements: [
         {
           type: "text",
-          text: "中文 &lt;x&gt; & y\n[Zotero Feishu Sync] " + marker,
+          text: "中文 &lt;x&gt; & y" + hiddenMarker(marker) + "\n",
         },
       ],
     });
@@ -82,9 +85,11 @@ describe("native annotation API and persistence", function () {
     assert.deepEqual(requests[1].body.content.elements, [
       {
         type: "text_run",
-        text_run: { text: "edited\n[Zotero Feishu Sync] " + marker },
+        text_run: { text: "edited" + hiddenMarker(marker) + "\n" },
       },
     ]);
+    assert.notInclude(JSON.stringify(requests[0].body), marker);
+    assert.notInclude(JSON.stringify(requests[1].body), "[Zotero Feishu Sync]");
     assert.equal(requests[2].method, "PATCH");
     assert.include(requests[2].url, "/blocks/Block1?document_revision_id=42");
     assert.deepEqual(requests[2].body.update_text_elements.elements, [

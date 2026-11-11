@@ -9,6 +9,8 @@ import {
   replyText,
   sourceMarker,
   createElements,
+  hiddenMarker,
+  hiddenSourceMarker,
 } from "../src/modules/annotations/client";
 import {
   findRange,
@@ -90,13 +92,23 @@ class FakeClient {
       reply_id: "reply-" + id,
       content: {
         elements: [
-          { type: "text_run", text_run: { text: commentText(text) } },
-          marker.includes("#zfs=")
-            ? {
-                type: "text_run",
-                text_run: { text: "[Zotero Feishu Sync] " + marker },
-              }
-            : { type: "docs_link", docs_link: { url: marker }, text_run: null },
+          {
+            type: "text_run",
+            text_run: {
+              text: marker.includes("#zfs=")
+                ? commentText(text).replace(/\n$/, hiddenMarker(marker) + "\n")
+                : commentText(text),
+            },
+          },
+          ...(!marker.includes("#zfs=")
+            ? [
+                {
+                  type: "docs_link",
+                  docs_link: { url: marker },
+                  text_run: null,
+                },
+              ]
+            : []),
         ],
       },
     };
@@ -265,15 +277,83 @@ describe("native selected-range annotations", function () {
     );
   });
 
-  it("uses text provenance, escapes angle brackets, and rejects oversized comments", function () {
+  it("uses invisible provenance, escapes angle brackets, and rejects oversized comments", function () {
     const e = createElements("a < b & c > d", "https://example.org");
     assert.equal(
       e[0].text,
-      "a &lt; b & c &gt; d\n[Zotero Feishu Sync] https://example.org",
+      "a &lt; b & c &gt; d" + hiddenMarker("https://example.org") + "\n",
     );
     assert.throws(() =>
       createElements("x".repeat(10000), "https://example.org"),
     );
+  });
+
+  it("decodes invisible provenance across split runs without changing visible text", function () {
+    const marker =
+      "https://www.zotero.org/users/42/items/ANNOT123#zfs=abc&duplicate=C1";
+    const raw = "中文 🧠 comment" + hiddenMarker(marker) + "\n";
+    const reply = {
+      content: {
+        elements: [
+          { text_run: { text: raw.slice(0, 43) } },
+          { text_run: { text: raw.slice(43) } },
+        ],
+      },
+    };
+    assert.equal(replyText(reply), "中文 🧠 comment\n");
+    assert.equal(sourceMarker(reply, "ANNOT123"), marker);
+    assert.equal(hiddenSourceMarker(reply), marker);
+    assert.isUndefined(sourceMarker(reply, "OTHER123"));
+    assert.notInclude(raw, marker);
+    assert.notInclude(raw, "Zotero Feishu Sync");
+    const canvas = Zotero.getMainWindow().document.createElementNS(
+      "http://www.w3.org/1999/xhtml",
+      "canvas",
+    ) as HTMLCanvasElement;
+    const ctx = canvas.getContext("2d")!;
+    ctx.font = "16px sans-serif";
+    assert.equal(
+      ctx.measureText(raw.trimEnd()).width,
+      ctx.measureText("中文 🧠 comment").width,
+    );
+  });
+
+  it("leaves malformed invisible data intact instead of accepting a source identity", function () {
+    const raw = "comment\u2063\u2060\u2063\ufe01\u2063\u2064\u2063\n";
+    const reply = { content: { elements: [{ text_run: { text: raw } }] } };
+    assert.isUndefined(hiddenSourceMarker(reply));
+    assert.equal(replyText(reply), raw);
+  });
+
+  it("migrates a visible suffix in place and leaves the next sync unchanged", async function () {
+    const first = await sync();
+    const marker = sourceMarker(client.roots[first.commentId!], "ANNOT123")!;
+    client.roots[first.commentId!].content.elements = [
+      {
+        type: "text_run",
+        text_run: {
+          text:
+            commentText(source.annotations[0].comment) +
+            "[Zotero Feishu Sync] " +
+            marker,
+        },
+      },
+    ];
+    client.cards[0].reply_list.replies = [
+      clone(client.roots[first.commentId!]),
+    ];
+    state = emptyAnnotationState();
+    const migrated = await sync();
+    assert.equal(migrated.status, "synced");
+    assert.equal(migrated.commentId, first.commentId);
+    assert.equal(client.creates, 1);
+    assert.equal(client.updates, 1);
+    assert.equal(hiddenSourceMarker(client.roots[first.commentId!]), marker);
+    assert.notInclude(
+      client.roots[first.commentId!].content.elements[0].text_run.text,
+      "[Zotero Feishu Sync]",
+    );
+    assert.equal((await sync()).status, "unchanged");
   });
 
   it("recovers trailing provenance across split runs and keeps legacy links readable", function () {
@@ -369,14 +449,27 @@ describe("native selected-range annotations", function () {
 
   it("does not overwrite independently edited remote comments after changing machines", async function () {
     const first = await sync();
+    const marker = sourceMarker(client.roots[first.commentId!], "ANNOT123")!;
     client.roots[first.commentId!].content.elements[0].text_run.text =
-      "manual remote edit\n";
+      "manual remote edit" + hiddenMarker(marker) + "\n";
     client.cards[0].reply_list.replies = [
       clone(client.roots[first.commentId!]),
     ];
     state = emptyAnnotationState();
     source.annotations[0].comment = "source edit";
     assert.equal((await sync()).status, "pending");
+    assert.equal(client.updates, 0);
+  });
+
+  it("keeps a known comment pending if a manual edit removes its metadata", async function () {
+    const first = await sync();
+    client.roots[first.commentId!].content.elements[0].text_run.text =
+      "manual remote edit\n";
+    client.cards[0].reply_list.replies = [
+      clone(client.roots[first.commentId!]),
+    ];
+    assert.equal((await sync()).status, "pending");
+    assert.equal(client.creates, 1);
     assert.equal(client.updates, 0);
   });
 
