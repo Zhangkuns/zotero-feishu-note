@@ -7,6 +7,9 @@ import {
 } from "./feishuClient";
 import { OAuthService } from "./oauthService";
 import { StateStore } from "./stateStore";
+import { mappingNote } from "./annotations/mapping";
+import { NativeAnnotationService } from "./annotations/service";
+import type { AnnotationClient } from "./annotations/client";
 import type {
   DocumentModel,
   DocumentSection,
@@ -31,6 +34,7 @@ export interface SyncStateRepository {
 }
 
 export interface SyncClient {
+  annotations?: AnnotationClient;
   getCurrentUser(): Promise<FeishuUser>;
   testConnection(folderToken: string): Promise<void>;
   createDocument(title: string, folderToken: string): Promise<CreatedDocument>;
@@ -55,6 +59,7 @@ export interface SyncServiceDependencies {
 }
 
 export class SyncService {
+  readonly annotations: NativeAnnotationService;
   readonly oauth: OAuthService;
   readonly state: SyncStateRepository;
   readonly client: SyncClient;
@@ -67,10 +72,15 @@ export class SyncService {
     this.oauth = dependencies.oauth || new OAuthService();
     this.state = dependencies.state || new StateStore();
     this.client = dependencies.client || new FeishuClient(this.oauth);
+    this.annotations = new NativeAnnotationService(
+      this.oauth,
+      this.client.annotations || new FeishuClient(this.oauth).annotations,
+    );
     this.documentBuilder = dependencies.buildDocument || buildDocument;
   }
 
   unregister(): void {
+    this.annotations.stop();
     this.oauth.cancelPendingAuthorization();
   }
 
@@ -106,6 +116,8 @@ export class SyncService {
     };
     try {
       assertSupportedItem(item);
+      const mapping = mappingNote(item);
+      if (mapping) return await this.annotations.syncItem(item, mapping);
       const folder = configuredFolder();
       const model = await this.documentBuilder(item);
       let record = await this.state.get(item.libraryID, item.key);
@@ -198,6 +210,9 @@ export class SyncService {
   }
 
   private async performDeleteItem(item: Zotero.Item): Promise<boolean> {
+    if (mappingNote(item)) {
+      throw new Error("映射的论文文档受保护，批注同步不会删除这些文档");
+    }
     const record = await this.state.get(item.libraryID, item.key);
     if (!record) return false;
     try {
@@ -232,6 +247,12 @@ export class SyncService {
 
   async openItem(item: Zotero.Item): Promise<boolean> {
     const topLevelItem = resolveTopLevelItem(item);
+    const mapping = mappingNote(topLevelItem);
+    if (mapping) {
+      if (!mapping.documentUrl) return false;
+      Zotero.launchURL(mapping.documentUrl);
+      return true;
+    }
     const record = await this.state.get(
       topLevelItem.libraryID,
       topLevelItem.key,

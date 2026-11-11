@@ -1,5 +1,6 @@
 import { assert } from "chai";
 import { config } from "../package.json";
+import { getPref, setPref } from "../src/utils/prefs";
 
 const PREFERENCE_PANE_ID = "zotero-feishu-preferences";
 
@@ -47,12 +48,97 @@ describe("preferences", function () {
         status.dataset.state === "neutral" ? "connect" : "disconnect",
       );
       assert.lengthOf(document.querySelectorAll(".connection-action"), 1);
-      assert.lengthOf(
-        document.querySelectorAll(".zotero-feishu-preferences button"),
-        1,
+      for (const id of [
+        "test-connection",
+        "auto-annotations",
+        "enable-annotations",
+        "annotation-scope",
+        "annotation-collection",
+        "annotation-delay",
+        "retry-annotations",
+        "annotation-retry",
+        "annotation-reconcile",
+        "relaxed-matching",
+        "include-highlights",
+        "preview-annotations",
+        "sync-annotations",
+        "retry-pending",
+        "refresh-history",
+        "annotation-history",
+      ]) {
+        assert.exists(document.getElementById("zotero-feishu-" + id), id);
+      }
+      assert.notExists(
+        document.getElementById("zotero-feishu-annotation-config"),
+      );
+      const delay = document.getElementById(
+        "zotero-feishu-annotation-delay",
+      ) as HTMLInputElement;
+      assert.equal(delay.min, "0.5");
+      assert.equal(delay.max, "300");
+      assert.equal(
+        (
+          document.getElementById(
+            "zotero-feishu-annotation-retry",
+          ) as HTMLInputElement
+        ).min,
+        "30",
       );
       assert.notExists(document.getElementById("zotero-feishu-app-id"));
       assert.notExists(document.querySelector(".advanced-settings"));
+      const enabled = document.getElementById(
+        "zotero-feishu-enable-annotations",
+      ) as HTMLInputElement;
+      const mode = document.getElementById(
+        "zotero-feishu-auto-annotations",
+      ) as HTMLSelectElement;
+      const scope = document.getElementById(
+        "zotero-feishu-annotation-scope",
+      ) as HTMLSelectElement;
+      const collection = document.getElementById(
+        "zotero-feishu-annotation-collection",
+      ) as HTMLSelectElement;
+      const manual = document.getElementById(
+        "zotero-feishu-sync-annotations",
+      ) as HTMLButtonElement;
+      const previous = {
+        enabled: getPref("enableAnnotationSync"),
+        auto: getPref("autoSyncAnnotations"),
+        scope: getPref("annotationScope"),
+      };
+      const change = (control: Element) =>
+        control.dispatchEvent(
+          new (preferencesWindow as any).Event("change", { bubbles: true }),
+        );
+      try {
+        enabled.checked = false;
+        change(enabled);
+        assert.isFalse(getPref("enableAnnotationSync"));
+        assert.isTrue(manual.disabled);
+        assert.isTrue(mode.disabled);
+        enabled.checked = true;
+        change(enabled);
+        mode.value = "manual";
+        change(mode);
+        assert.isFalse(getPref("autoSyncAnnotations"));
+        assert.isFalse(manual.disabled);
+        assert.isTrue(delay.disabled);
+        scope.value = "collection";
+        change(scope);
+        assert.equal(getPref("annotationScope"), "collection");
+        assert.isFalse(collection.disabled);
+        scope.value = "all";
+        change(scope);
+        assert.isTrue(collection.disabled);
+        mode.value = "auto";
+        change(mode);
+        assert.isTrue(getPref("autoSyncAnnotations"));
+        assert.isFalse(delay.disabled);
+      } finally {
+        setPref("enableAnnotationSync", previous.enabled);
+        setPref("autoSyncAnnotations", previous.auto);
+        setPref("annotationScope", previous.scope);
+      }
     } finally {
       try {
         preferencesWindow?.close();

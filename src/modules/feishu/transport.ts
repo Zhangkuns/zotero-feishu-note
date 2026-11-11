@@ -24,8 +24,9 @@ export class FeishuTransport {
     method: string,
     path: string,
     body?: Record<string, unknown>,
+    retrySafe = true,
   ): Promise<Record<string, unknown>> {
-    return this.retry(async () => {
+    const operation = async () => {
       const token = await this.oauth.getAccessToken();
       try {
         const response = await Zotero.HTTP.request(method, `${API}${path}`, {
@@ -61,7 +62,8 @@ export class FeishuTransport {
         }
         throw error;
       }
-    });
+    };
+    return retrySafe ? this.retry(operation) : operation();
   }
 
   async mediaRequest(

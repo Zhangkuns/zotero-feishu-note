@@ -19,3 +19,8 @@ logs
 .agents
 skills-lock.json
 tmp
+
+# Local authenticated fixtures and bridge state
+verification/local/
+bridge/__pycache__/
+bridge/.state/

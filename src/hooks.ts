@@ -40,6 +40,7 @@ async function onStartup() {
     image: `chrome://${addon.data.config.addonRef}/content/icons/favicon.png`,
   });
   addon.syncStatus.register();
+  addon.annotations.register();
 
   await Promise.all(
     Zotero.getMainWindows().map((win) => onMainWindowLoad(win)),
@@ -61,6 +62,7 @@ async function onMainWindowUnload(win: Window): Promise<void> {
 }
 
 function onShutdown(): void {
+  addon.annotations.unregister();
   unregisterPreferencePane();
   addon.sync.unregister();
   addon.syncStatus.unregister();

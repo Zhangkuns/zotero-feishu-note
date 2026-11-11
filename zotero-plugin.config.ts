@@ -7,9 +7,11 @@ export default defineConfig({
   name: pkg.config.addonName,
   id: pkg.config.addonID,
   namespace: pkg.config.addonRef,
-  updateURL: `https://github.com/{{owner}}/{{repo}}/releases/download/release/${
-    pkg.version.includes("-") ? "update-beta.json" : "update.json"
-  }`,
+  // Zotero requires a secure update URL even for a local candidate. The
+  // reserved .invalid host cannot replace the fork with an upstream build.
+  updateURL:
+    process.env.ZOTERO_FEISHU_UPDATE_URL ||
+    "https://zotero-feishu-native.invalid/update.json",
   xpiDownloadLink:
     "https://github.com/{{owner}}/{{repo}}/releases/download/v{{version}}/{{xpiName}}.xpi",
 

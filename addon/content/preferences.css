@@ -91,7 +91,8 @@
   align-items: center;
 }
 
-.settings-field input {
+.settings-field input,
+.settings-field select {
   box-sizing: border-box;
   min-width: 0;
   width: 100%;
@@ -101,4 +102,34 @@
   .settings-field {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+.settings-check {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 12px 0;
+}
+.annotation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.annotation-history {
+  max-height: 420px;
+  overflow: auto;
+  margin-top: 12px;
+}
+.annotation-history article {
+  border-top: 1px solid GrayText;
+  padding: 10px 0;
+}
+.annotation-history p {
+  margin: 5px 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.annotation-history .history-error {
+  color: light-dark(#a51c30, #ffa3a3);
 }

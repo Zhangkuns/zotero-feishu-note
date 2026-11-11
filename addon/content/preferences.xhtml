@@ -31,6 +31,10 @@
             data-l10n-id="pref-status-not-connected"
           />
           <html:button
+            id="zotero-feishu-test-connection"
+            data-l10n-id="pref-test-connection"
+          />
+          <html:button
             id="zotero-feishu-connection-action"
             class="connection-action"
             data-l10n-id="pref-connect"
@@ -59,5 +63,139 @@
       />
       <html:input id="zotero-feishu-target-folder" type="text" />
     </html:div>
+  </html:section>
+  <html:section
+    class="settings-section"
+    aria-labelledby="zotero-feishu-annotation-heading"
+  >
+    <html:h3
+      id="zotero-feishu-annotation-heading"
+      data-l10n-id="pref-annotations-title"
+    />
+    <html:p data-l10n-id="pref-annotations-help" />
+    <html:label class="settings-check"
+      ><html:input
+        id="zotero-feishu-enable-annotations"
+        type="checkbox" /><html:span data-l10n-id="pref-enable-annotations"
+    /></html:label>
+    <html:div class="settings-field">
+      <html:label
+        for="zotero-feishu-auto-annotations"
+        data-l10n-id="pref-annotation-mode"
+      />
+      <html:select id="zotero-feishu-auto-annotations">
+        <html:option value="auto" data-l10n-id="pref-mode-auto" />
+        <html:option value="manual" data-l10n-id="pref-mode-manual" />
+      </html:select>
+    </html:div>
+    <html:div class="settings-field">
+      <html:label
+        for="zotero-feishu-annotation-scope"
+        data-l10n-id="pref-annotation-scope"
+      />
+      <html:select id="zotero-feishu-annotation-scope">
+        <html:option value="all" data-l10n-id="pref-scope-all" />
+        <html:option value="collection" data-l10n-id="pref-scope-collection" />
+      </html:select>
+      <html:select
+        id="zotero-feishu-annotation-collection"
+        data-l10n-attrs="aria-label"
+        data-l10n-id="pref-annotation-collection"
+      />
+    </html:div>
+    <html:div class="settings-field">
+      <html:label
+        for="zotero-feishu-annotation-delay"
+        data-l10n-id="pref-annotation-delay"
+      />
+      <html:input
+        id="zotero-feishu-annotation-delay"
+        type="number"
+        min="0.5"
+        max="300"
+        step="0.5"
+      />
+    </html:div>
+    <html:label class="settings-check"
+      ><html:input
+        id="zotero-feishu-retry-annotations"
+        type="checkbox" /><html:span data-l10n-id="pref-retry-annotations"
+    /></html:label>
+    <html:div class="settings-field">
+      <html:label
+        for="zotero-feishu-annotation-retry"
+        data-l10n-id="pref-annotation-retry"
+      />
+      <html:input
+        id="zotero-feishu-annotation-retry"
+        type="number"
+        min="30"
+        max="3600"
+        step="30"
+      />
+    </html:div>
+    <html:div class="field-row">
+      <html:label
+        for="zotero-feishu-annotation-reconcile"
+        data-l10n-id="pref-annotation-reconcile"
+      />
+      <html:input
+        id="zotero-feishu-annotation-reconcile"
+        type="number"
+        min="60"
+        max="3600"
+        step="30"
+      />
+    </html:div>
+    <html:p data-l10n-id="pref-annotation-concurrency" />
+    <html:label class="settings-check"
+      ><html:input
+        id="zotero-feishu-relaxed-matching"
+        type="checkbox" /><html:span data-l10n-id="pref-relaxed-matching"
+    /></html:label>
+    <html:label class="settings-check"
+      ><html:input
+        id="zotero-feishu-include-highlights"
+        type="checkbox" /><html:span data-l10n-id="pref-include-highlights"
+    /></html:label>
+    <html:p data-l10n-id="pref-annotation-limits" />
+    <html:div class="annotation-actions">
+      <html:button
+        id="zotero-feishu-preview-annotations"
+        data-l10n-id="pref-preview-annotations"
+      />
+      <html:button
+        id="zotero-feishu-sync-annotations"
+        data-l10n-id="pref-sync-annotations"
+      />
+      <html:button
+        id="zotero-feishu-retry-pending"
+        data-l10n-id="pref-retry-pending"
+      />
+    </html:div>
+    <html:p
+      id="zotero-feishu-annotation-feedback"
+      role="status"
+      aria-live="polite"
+    />
+  </html:section>
+  <html:section
+    class="settings-section"
+    aria-labelledby="zotero-feishu-history-heading"
+  >
+    <html:h3
+      id="zotero-feishu-history-heading"
+      data-l10n-id="pref-history-title"
+    />
+    <html:p data-l10n-id="pref-history-help" />
+    <html:button
+      id="zotero-feishu-refresh-history"
+      data-l10n-id="pref-refresh-history"
+    />
+    <html:div
+      id="zotero-feishu-annotation-history"
+      class="annotation-history"
+      aria-live="polite"
+    />
   </html:section>
 </groupbox>

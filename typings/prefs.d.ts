@@ -10,6 +10,16 @@ declare namespace _ZoteroTypes {
       "appId": string;
       "targetFolder": string;
       "accessTokenExpiresAt": string;
+      "enableAnnotationSync": boolean;
+      "autoSyncAnnotations": boolean;
+      "annotationScope": string;
+      "annotationCollectionKey": string;
+      "annotationDelaySeconds": string;
+      "retryAnnotations": boolean;
+      "annotationRetrySeconds": string;
+      "annotationReconcileSeconds": string;
+      "relaxedAnnotationMatching": boolean;
+      "syncUncommentedHighlights": boolean;
     };
   }
 }

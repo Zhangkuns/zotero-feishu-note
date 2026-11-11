@@ -2,6 +2,7 @@ import { config } from "../package.json";
 import hooks from "./hooks";
 import { SyncService } from "./modules/syncService";
 import { SyncStatusService } from "./modules/syncStatus";
+import { AnnotationObserver } from "./modules/annotationSync";
 import { createZToolkit } from "./utils/ztoolkit";
 
 class Addon {
@@ -22,6 +23,7 @@ class Addon {
   public hooks: typeof hooks;
   public sync: SyncService;
   public syncStatus: SyncStatusService;
+  public annotations: AnnotationObserver;
   // APIs
   public api: object;
 
@@ -36,6 +38,7 @@ class Addon {
     this.hooks = hooks;
     this.sync = new SyncService();
     this.syncStatus = new SyncStatusService();
+    this.annotations = new AnnotationObserver();
     this.api = {};
   }
 }

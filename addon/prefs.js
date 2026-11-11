@@ -1,3 +1,13 @@
 pref("appId", "");
 pref("targetFolder", "");
 pref("accessTokenExpiresAt", "0");
+pref("enableAnnotationSync", true);
+pref("autoSyncAnnotations", true);
+pref("annotationScope", "all");
+pref("annotationCollectionKey", "");
+pref("annotationDelaySeconds", "1.5");
+pref("retryAnnotations", true);
+pref("annotationRetrySeconds", "60");
+pref("annotationReconcileSeconds", "300");
+pref("relaxedAnnotationMatching", true);
+pref("syncUncommentedHighlights", true);

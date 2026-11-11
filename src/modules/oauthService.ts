@@ -2,6 +2,7 @@ import { getPref, setPref } from "../utils/prefs";
 import { CredentialStore } from "./credentialStore";
 import {
   FeishuDeviceAuth,
+  ANNOTATION_SCOPES,
   InvalidFeishuApplicationError,
   type ProgressCallback,
   type RegisteredApp,
@@ -77,6 +78,15 @@ export class OAuthService {
 
   isAuthorized(): boolean {
     return Boolean(this.credentials.getTokens()?.refreshToken);
+  }
+
+  missingAnnotationScopes(): string[] {
+    const granted = new Set(
+      (this.credentials.getTokens()?.scope || "")
+        .split(/[\s,]+/)
+        .filter(Boolean),
+    );
+    return ANNOTATION_SCOPES.filter((scope) => !granted.has(scope));
   }
 
   clearAuthorization(): void {

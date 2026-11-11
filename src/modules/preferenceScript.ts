@@ -1,3 +1,4 @@
+import { registerAnnotationPreferences } from "./annotations/preferences";
 import type { FluentMessageId } from "../../typings/i10n";
 import { getLocaleID } from "../utils/locale";
 import { getPref, setPref } from "../utils/prefs";
@@ -18,6 +19,7 @@ interface StatusElements {
 export async function registerPrefsScripts(window: Window): Promise<void> {
   addon.data.prefs = { window };
   const document = window.document;
+  await registerAnnotationPreferences(window);
   refreshStylesheet(document);
   await initializeTargetHelp(document);
   const targetFolder = input(document, "zotero-feishu-target-folder");
@@ -39,7 +41,10 @@ export async function registerPrefsScripts(window: Window): Promise<void> {
       addon.sync.oauth.cancelPendingAuthorization();
       return;
     }
-    if (addon.sync.oauth.isAuthorized()) {
+    if (
+      addon.sync.oauth.isAuthorized() &&
+      !addon.sync.oauth.missingAnnotationScopes().length
+    ) {
       addon.sync.oauth.clearAuthorization();
       await renderConnectionStatus(document, status);
       await renderAction(document, action, false);
@@ -54,11 +59,46 @@ export async function registerPrefsScripts(window: Window): Promise<void> {
         void renderProgress(document, status, progress);
       });
       await renderConnectionStatus(document, status);
+      void addon.sync.annotations
+        .retryPending()
+        .catch((error) => ztoolkit.log("Annotation retry failed", error));
     } catch (error) {
       await renderAuthorizationError(document, status, error);
     } finally {
       authorizationPending = false;
       action.disabled = false;
+      await renderAction(document, action, authorizationPending);
+    }
+  });
+
+  const testConnection = button(document, "zotero-feishu-test-connection");
+  bind(testConnection, async () => {
+    testConnection.disabled = true;
+    try {
+      const user = await addon.sync.getCurrentUser();
+      const missing = addon.sync.oauth.missingAnnotationScopes();
+      if (missing.length) {
+        await setStatus(
+          document,
+          status,
+          "warning",
+          "pref-annotation-permissions",
+          undefined,
+          { scopes: missing.join(", ") },
+        );
+      } else
+        await setStatus(
+          document,
+          status,
+          "success",
+          "pref-connection-tested",
+          undefined,
+          { name: user.name },
+        );
+    } catch (error) {
+      await renderAuthorizationError(document, status, error);
+    } finally {
+      testConnection.disabled = false;
       await renderAction(document, action, authorizationPending);
     }
   });
@@ -117,6 +157,18 @@ async function renderConnectionStatus(
   await setStatus(document, status, "busy", "pref-status-loading-user");
   try {
     const user = await addon.sync.getCurrentUser();
+    const missing = addon.sync.oauth.missingAnnotationScopes();
+    if (missing.length) {
+      await setStatus(
+        document,
+        status,
+        "warning",
+        "pref-annotation-permissions",
+        undefined,
+        { scopes: missing.join(", ") },
+      );
+      return;
+    }
     await setStatus(
       document,
       status,
@@ -145,7 +197,9 @@ async function renderAction(
   const mode = authorizationPending
     ? "cancel"
     : addon.sync.oauth.isAuthorized()
-      ? "disconnect"
+      ? addon.sync.oauth.missingAnnotationScopes().length
+        ? "reauthorize"
+        : "disconnect"
       : "connect";
   action.dataset.mode = mode;
   action.textContent = await translate(document, `pref-${mode}`);

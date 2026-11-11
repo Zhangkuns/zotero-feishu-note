@@ -5,6 +5,7 @@ import type {
   FeishuUser,
   SyncedSection,
 } from "./types";
+import { FeishuAnnotationClient } from "./annotations/client";
 import { OAuthService } from "./oauthService";
 import { FeishuBlockWriter } from "./feishu/blockWriter";
 import { FeishuDocumentReader } from "./feishu/documentReader";
@@ -34,6 +35,7 @@ export interface CreatedDocument {
 }
 
 export class FeishuClient {
+  readonly annotations: FeishuAnnotationClient;
   private readonly transport: FeishuTransport;
   private readonly reader: FeishuDocumentReader;
   private readonly writer: FeishuBlockWriter;
@@ -41,6 +43,7 @@ export class FeishuClient {
 
   constructor(oauth: OAuthService) {
     this.transport = new FeishuTransport(oauth);
+    this.annotations = new FeishuAnnotationClient(this.transport);
     this.reader = new FeishuDocumentReader(this.transport);
     this.writer = new FeishuBlockWriter(this.transport);
     this.executor = new FeishuSyncExecutor(

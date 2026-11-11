@@ -12,7 +12,14 @@ export {
   InvalidFeishuApplicationError,
 } from "./feishu/deviceProtocol";
 
+export const ANNOTATION_SCOPES = [
+  "docs:document.comment:read",
+  "docs:document.comment:create",
+  "docs:document.comment:update",
+] as const;
+
 export const FEISHU_SCOPES = [
+  ...ANNOTATION_SCOPES,
   "docx:document",
   "docx:document.block:convert",
   "docs:document.media:upload",
