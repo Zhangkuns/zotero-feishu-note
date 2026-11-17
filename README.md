@@ -161,8 +161,9 @@ npm run publish:update -- --publish # publish XPI/source and update the feed
 Publishing requires the maintainer's existing `gh` login. Users need only Zotero;
 no GitHub login, CLI, Python, or bridge is used for updates.
 
-`npm run release` uses this same guarded publisher. Use it for this fork rather
-than the upstream tag-triggered Actions template, which does not update the fork's
-channel checksum. Keep that legacy release workflow disabled when enabling Actions
-on this fork. Plugin users receive updates from the published feed independently
-of Actions and do not need GitHub authorization.
+The manual **Publish fork update** Actions workflow and `npm run release` use
+this same guarded publisher. Increase the version, commit and push first, then run
+**Actions → Publish fork update → Run workflow**. Existing version releases cannot
+be overwritten. The upstream tag-triggered workflow is replaced so another rebuild
+cannot overwrite an XPI without updating its channel checksum. Plugin users receive
+updates from the published feed and do not need GitHub authorization.
