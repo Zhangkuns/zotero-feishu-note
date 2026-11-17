@@ -13,7 +13,7 @@ describe("startup", function () {
     );
 
     assert.lengthOf(panes, 1);
-    assert.equal(panes[0].id, "zotero-feishu-preferences");
+    assert.equal(panes[0].id, "zotero-feishu-note-preferences");
     assert.equal(plugin.data.preferencePaneID, panes[0].id);
   });
 

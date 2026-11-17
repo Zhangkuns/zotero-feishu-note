@@ -200,7 +200,7 @@ function showErrorDialog(results: SyncResult[]): void {
       false,
     )
     .addButton("Close", "close")
-    .open("Zotero Feishu Sync - Errors", {
+    .open("zotero-feishu-note - Errors", {
       width: 700,
       height: 400,
       centerscreen: true,

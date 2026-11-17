@@ -10,8 +10,10 @@ declare namespace _ZoteroTypes {
       "appId": string;
       "targetFolder": string;
       "accessTokenExpiresAt": string;
+      "autoUpdatePlugin": boolean;
       "enableAnnotationSync": boolean;
       "autoSyncAnnotations": boolean;
+      "syncDeletedAnnotations": boolean;
       "annotationScope": string;
       "annotationCollectionKey": string;
       "annotationDelaySeconds": string;

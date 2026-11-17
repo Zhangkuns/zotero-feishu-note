@@ -1,24 +1,24 @@
 {
-  "name": "zotero-feishu",
+  "name": "zotero-feishu-note",
   "type": "module",
-  "version": "0.8.0-beta.2",
-  "description": "Sync Zotero literature and notes to Feishu documents",
+  "version": "0.8.0-beta.3",
+  "description": "Sync Zotero source annotations and deletions to Feishu paper comments",
   "config": {
-    "addonName": "Zotero Feishu Sync",
-    "addonID": "zotero-feishu@wu-uk.github.io",
-    "addonRef": "zoteroFeishu",
-    "addonInstance": "ZoteroFeishu",
-    "prefsPrefix": "extensions.zotero.zoteroFeishu"
+    "addonName": "zotero-feishu-note",
+    "addonID": "zotero-feishu-note@zhangkuns.github.io",
+    "addonRef": "zoteroFeishuNote",
+    "addonInstance": "ZoteroFeishuNote",
+    "prefsPrefix": "extensions.zotero.zoteroFeishuNote"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/wu-uk/zotero-feishu.git"
+    "url": "git+https://github.com/Zhangkuns/zotero-feishu-note.git"
   },
   "author": "wu-uk",
   "bugs": {
-    "url": "https://github.com/wu-uk/zotero-feishu/issues"
+    "url": "https://github.com/Zhangkuns/zotero-feishu-note/issues"
   },
-  "homepage": "https://github.com/wu-uk/zotero-feishu#readme",
+  "homepage": "https://github.com/Zhangkuns/zotero-feishu-note#readme",
   "license": "AGPL-3.0-or-later",
   "scripts": {
     "start": "zotero-plugin serve",
@@ -27,7 +27,8 @@
     "lint:fix": "prettier --write . && eslint src test addon --fix",
     "release": "zotero-plugin release",
     "test": "zotero-plugin test",
-    "update-deps": "npm update --save"
+    "update-deps": "npm update --save",
+    "publish:update": "node tools/publish-update.mjs"
   },
   "dependencies": {
     "zotero-plugin-toolkit": "^5.1.4"

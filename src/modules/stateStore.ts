@@ -83,7 +83,7 @@ export class StateStore {
       this.options.path ||
       this.pathUtils.join(
         this.pathUtils.profileDir,
-        "zotero-feishu",
+        "zotero-feishu-note",
         "state.json",
       )
     );

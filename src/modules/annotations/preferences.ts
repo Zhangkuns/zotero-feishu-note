@@ -63,6 +63,7 @@ export async function registerAnnotationPreferences(
     const auto = enabled && Boolean(getPref("autoSyncAnnotations"));
     for (const id of [
       "auto-annotations",
+      "delete-annotations",
       "annotation-scope",
       "relaxed-matching",
       "include-highlights",
@@ -96,6 +97,7 @@ export async function registerAnnotationPreferences(
   });
   const bools = [
     ["enable-annotations", "enableAnnotationSync"],
+    ["delete-annotations", "syncDeletedAnnotations"],
     ["retry-annotations", "retryAnnotations"],
     ["relaxed-matching", "relaxedAnnotationMatching"],
     ["include-highlights", "syncUncommentedHighlights"],
@@ -106,7 +108,7 @@ export async function registerAnnotationPreferences(
     input.addEventListener("change", () => {
       setPref(pref, input.checked);
       updateControls();
-      if (pref === "enableAnnotationSync")
+      if (pref === "enableAnnotationSync" || pref === "syncDeletedAnnotations")
         addon.sync.annotations.requestDiscovery();
     });
   }
@@ -239,12 +241,18 @@ async function renderHistory(doc: Document): Promise<void> {
         ),
       );
       const counts = Object.fromEntries(
-        ["synced", "unchanged", "matched", "pending", "skipped"].map(
-          (status) => [
-            status,
-            entry.details.filter((d) => d.status === status).length,
-          ],
-        ),
+        [
+          "synced",
+          "unchanged",
+          "matched",
+          "pending",
+          "skipped",
+          "deleted",
+          "resolved",
+        ].map((status) => [
+          status,
+          entry.details.filter((d) => d.status === status).length,
+        ]),
       );
       article.append(
         create("p", await preferenceText(doc, "pref-history-counts", counts)),

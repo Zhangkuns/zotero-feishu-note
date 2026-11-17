@@ -13,6 +13,7 @@ describe("mapped annotation synchronization", function () {
   this.timeout(15000);
   const created: Zotero.Item[] = [];
   let previousAuto: boolean;
+  let previousDeletion: boolean;
   let previousDelay: string;
   let previousEnabled: boolean;
   let previousScope: string;
@@ -25,6 +26,8 @@ describe("mapped annotation synchronization", function () {
 
   before(function () {
     previousAuto = getPref("autoSyncAnnotations");
+    previousDeletion = getPref("syncDeletedAnnotations");
+    setPref("syncDeletedAnnotations", false);
     previousEnabled = getPref("enableAnnotationSync");
     previousScope = getPref("annotationScope");
     previousCollection = getPref("annotationCollectionKey");
@@ -56,6 +59,7 @@ describe("mapped annotation synchronization", function () {
 
   after(function () {
     setPref("autoSyncAnnotations", previousAuto);
+    setPref("syncDeletedAnnotations", previousDeletion);
     setPref("enableAnnotationSync", previousEnabled);
     setPref("annotationScope", previousScope);
     setPref("annotationCollectionKey", previousCollection);
@@ -358,5 +362,43 @@ describe("mapped annotation synchronization", function () {
     await annotation(item, "text/html");
     await new Promise((resolve) => setTimeout(resolve, 1900));
     assert.equal(calls, 0);
+  });
+
+  it("discovers deleted sources after delete and native sync-finish notifications", async function () {
+    const item = await paper(),
+      highlight = await annotation(item, "text/html");
+    const service = plugin.sync.annotations;
+    const original = service.retryPending;
+    let calls = 0;
+    service.retryPending = async () => {
+      calls++;
+    };
+    try {
+      setPref("autoSyncAnnotations", true);
+      await highlight.eraseTx();
+      await Zotero.Promise.delay(1800);
+      assert.equal(calls, 1);
+      await Zotero.Notifier.trigger("finish" as any, "sync", [item.libraryID]);
+      await Zotero.Promise.delay(1800);
+      assert.equal(calls, 2);
+      setPref("autoSyncAnnotations", false);
+      await Zotero.Notifier.trigger("finish" as any, "sync", [item.libraryID]);
+      await Zotero.Promise.delay(1800);
+      assert.equal(calls, 2);
+    } finally {
+      service.retryPending = original;
+    }
+  });
+
+  it("blocks annotation writes while the legacy plugin is still active", async function () {
+    const item = await paper(),
+      previous = (Zotero as any).ZoteroFeishu;
+    try {
+      (Zotero as any).ZoteroFeishu = { data: { alive: true } };
+      assert.include(annotationScopeReason(item), "卸载旧的");
+    } finally {
+      if (previous) (Zotero as any).ZoteroFeishu = previous;
+      else delete (Zotero as any).ZoteroFeishu;
+    }
   });
 });

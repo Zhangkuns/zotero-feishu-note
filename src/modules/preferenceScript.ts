@@ -1,4 +1,5 @@
 import { registerAnnotationPreferences } from "./annotations/preferences";
+import { registerUpdatePreferences } from "./updatePreferences";
 import type { FluentMessageId } from "../../typings/i10n";
 import { getLocaleID } from "../utils/locale";
 import { getPref, setPref } from "../utils/prefs";
@@ -20,6 +21,7 @@ export async function registerPrefsScripts(window: Window): Promise<void> {
   addon.data.prefs = { window };
   const document = window.document;
   await registerAnnotationPreferences(window);
+  await registerUpdatePreferences(window);
   refreshStylesheet(document);
   await initializeTargetHelp(document);
   const targetFolder = input(document, "zotero-feishu-target-folder");
@@ -43,7 +45,9 @@ export async function registerPrefsScripts(window: Window): Promise<void> {
     }
     if (
       addon.sync.oauth.isAuthorized() &&
-      !addon.sync.oauth.missingAnnotationScopes().length
+      !addon.sync.oauth.missingAnnotationScopes(
+        Boolean(getPref("syncDeletedAnnotations")),
+      ).length
     ) {
       addon.sync.oauth.clearAuthorization();
       await renderConnectionStatus(document, status);
@@ -76,7 +80,9 @@ export async function registerPrefsScripts(window: Window): Promise<void> {
     testConnection.disabled = true;
     try {
       const user = await addon.sync.getCurrentUser();
-      const missing = addon.sync.oauth.missingAnnotationScopes();
+      const missing = addon.sync.oauth.missingAnnotationScopes(
+        Boolean(getPref("syncDeletedAnnotations")),
+      );
       if (missing.length) {
         await setStatus(
           document,
@@ -157,7 +163,9 @@ async function renderConnectionStatus(
   await setStatus(document, status, "busy", "pref-status-loading-user");
   try {
     const user = await addon.sync.getCurrentUser();
-    const missing = addon.sync.oauth.missingAnnotationScopes();
+    const missing = addon.sync.oauth.missingAnnotationScopes(
+      Boolean(getPref("syncDeletedAnnotations")),
+    );
     if (missing.length) {
       await setStatus(
         document,
@@ -197,7 +205,9 @@ async function renderAction(
   const mode = authorizationPending
     ? "cancel"
     : addon.sync.oauth.isAuthorized()
-      ? addon.sync.oauth.missingAnnotationScopes().length
+      ? addon.sync.oauth.missingAnnotationScopes(
+          Boolean(getPref("syncDeletedAnnotations")),
+        ).length
         ? "reauthorize"
         : "disconnect"
       : "connect";

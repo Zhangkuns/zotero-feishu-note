@@ -1,8 +1,10 @@
 pref("appId", "");
 pref("targetFolder", "");
 pref("accessTokenExpiresAt", "0");
+pref("autoUpdatePlugin", true);
 pref("enableAnnotationSync", true);
 pref("autoSyncAnnotations", true);
+pref("syncDeletedAnnotations", true);
 pref("annotationScope", "all");
 pref("annotationCollectionKey", "");
 pref("annotationDelaySeconds", "1.5");

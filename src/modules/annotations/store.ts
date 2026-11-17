@@ -1,7 +1,14 @@
 import { clone } from "./ranges";
 import { requireValue } from "./mapping";
 export interface AnnotationRecord {
-  phase: "creating" | "not_created" | "anchoring" | "verified";
+  phase:
+    | "creating"
+    | "not_created"
+    | "anchoring"
+    | "verified"
+    | "deleting"
+    | "deleted"
+    | "resolved";
   commentId?: string;
   replyId?: string;
   blockId: string;
@@ -18,7 +25,16 @@ export interface PendingPaper {
 }
 export interface AnnotationDetail {
   annotationKey: string;
-  status: "synced" | "unchanged" | "matched" | "pending" | "skipped";
+  status:
+    | "synced"
+    | "unchanged"
+    | "matched"
+    | "pending"
+    | "skipped"
+    | "deleted"
+    | "resolved"
+    | "would-delete"
+    | "would-resolve";
   error?: string;
   selectedText?: string;
   commentId?: string;
@@ -60,7 +76,7 @@ export class AnnotationStore implements AnnotationStateRepository {
       this.file ||
       this.paths().join(
         this.paths().profileDir,
-        "zotero-feishu",
+        "zotero-feishu-note",
         "annotations.json",
       )
     );
@@ -104,9 +120,15 @@ export class AnnotationStore implements AnnotationStateRepository {
       for (const r of Object.values(s.records) as AnnotationRecord[])
         requireValue(
           r &&
-            ["creating", "not_created", "anchoring", "verified"].includes(
-              r.phase,
-            ) &&
+            [
+              "creating",
+              "not_created",
+              "anchoring",
+              "verified",
+              "deleting",
+              "deleted",
+              "resolved",
+            ].includes(r.phase) &&
             typeof r.blockId === "string",
           "invalid annotation record",
         );

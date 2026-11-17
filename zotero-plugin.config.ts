@@ -7,13 +7,12 @@ export default defineConfig({
   name: pkg.config.addonName,
   id: pkg.config.addonID,
   namespace: pkg.config.addonRef,
-  // Zotero requires a secure update URL even for a local candidate. The
-  // reserved .invalid host cannot replace the fork with an upstream build.
+  // This fork uses its own release channel and a distinct plugin identity.
   updateURL:
     process.env.ZOTERO_FEISHU_UPDATE_URL ||
-    "https://zotero-feishu-native.invalid/update.json",
+    "https://github.com/Zhangkuns/zotero-feishu-note/releases/download/updates/update.json",
   xpiDownloadLink:
-    "https://github.com/{{owner}}/{{repo}}/releases/download/v{{version}}/{{xpiName}}.xpi",
+    "https://github.com/Zhangkuns/zotero-feishu-note/releases/download/v{{version}}/zotero-feishu-note.xpi",
 
   build: {
     assets: ["addon/**/*.*", "LICENSE", "THIRD_PARTY_NOTICES.md"],

@@ -1,3 +1,44 @@
+# zotero-feishu-note beta.3 verification — 2026-11-16 (America/Los_Angeles)
+
+- 139 isolated Zotero 10.0.8 host tests passed, including update checks, installer
+  errors, the new identity, legacy-plugin coexistence protection and deletion cases.
+  The runner returned success; its esbuild service printed a shutdown-only diagnostic
+  after the final successful run. Production build and lint are checked separately.
+- New plugin identity: zotero-feishu-note@zhangkuns.github.io. Display name, package,
+  project directory and GitHub fork use zotero-feishu-note. Credentials require a new
+  connection; old local association files are copied once without deleting originals.
+- The updates section is visually checked in a real isolated Zotero preferences
+  window, above Sync location. Screenshot stays in ignored verification/local.
+- Update checks/installations use native AddonManager, a per-addon auto-update toggle,
+  a daily background check and a separate HTTPS GitHub update channel with SHA-512.
+  No newer real release has yet been installed automatically in a production profile;
+  publisher validation and public asset round-trip checks are recorded separately.
+- Added a default-enabled deletion control respecting the existing master switch,
+  automatic/manual mode and collection scope, plus native delete-permission prompts.
+- Host tests cover historical recovery, fresh-machine state, concurrent deletion,
+  stale-source resurrection, restoration, late replies, remote edits, lost responses,
+  previews, authorization, deletion/sync-finish notifications and UI controls.
+- Read-only checks on both computers confirmed the historical Circuit Tracing
+  annotation was absent. The Zotero cloud deletion log contained its key and a
+  current item-version request confirmed the key was not present.
+- A scoped verification harness ran the production deletion module, deletion source,
+  native Feishu client and transport against the actual APIs using the existing
+  p3tower account. It used a Node HTTP adapter for Zotero.HTTP and a credential pipe;
+  this is not a claim of an automatic in-app deletion by an installed beta.3 build.
+- The existing Feishu grant already included comment deletion. Preview selected
+  exactly the intended root with no follow-up replies. Exactly one DELETE request
+  removed it; it disappeared from the remote comment list.
+- Before/after snapshots each contained 1174 blocks. After normalizing text runs and
+  excluding only the authorized deleted comment ID, the body/style/other-comment
+  SHA-256 was identical. No document-block write request was permitted by the harness.
+- No real discussion with other people's replies was deleted or changed for testing.
+  Reply preservation/resolution and both deletion race cases are host-tested with
+  independent state stores; two physical computers simultaneously deleting the same
+  real annotation have not been exercised.
+- Evidence and the scoped harness remain under ignored verification/local and are
+  excluded from Git and source distributions. Upgrading both installed clients is
+  still necessary for subsequent automatic deletions; beta.2 retains its old behavior.
+
 # 原生批注同步候选版验证
 
 验证日期：2026-11-10 至 2026-11-11（America/Los_Angeles）。版本：0.8.0-beta.2。

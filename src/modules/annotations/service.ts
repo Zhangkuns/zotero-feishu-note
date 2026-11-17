@@ -3,6 +3,10 @@ import type { OAuthService } from "../oauthService";
 import type { SyncResult } from "../types";
 import type { AnnotationClient } from "./client";
 import { AnnotationEngine, type AnnotationInput } from "./engine";
+import {
+  ZoteroAnnotationDeletions,
+  type AnnotationDeletionSource,
+} from "./deletionSource";
 import { mappingNote, requireValue, type PaperMappingNote } from "./mapping";
 import {
   AnnotationStore,
@@ -25,6 +29,8 @@ export function annotationSettings() {
   };
 }
 export function annotationScopeReason(item: Zotero.Item): string | undefined {
+  if ((Zotero as any).ZoteroFeishu?.data?.alive)
+    return "请先停用或卸载旧的 Zotero Feishu Sync，避免两个插件同时同步";
   if (!getPref("enableAnnotationSync"))
     return "原文批注同步已关闭，请先在插件设置中启用";
   const scope = String(getPref("annotationScope"));
@@ -55,12 +61,14 @@ export class NativeAnnotationService {
     private readonly oauth: OAuthService,
     private readonly client: AnnotationClient,
     readonly store: AnnotationStateRepository = new AnnotationStore(),
+    private readonly deletions: AnnotationDeletionSource = new ZoteroAnnotationDeletions(),
   ) {}
   stop(): void {
     this.alive = false;
   }
   requestDiscovery(): void {
     this.discovered = false;
+    this.deletions.invalidate();
   }
   private exclusive<T>(f: () => Promise<T>): Promise<T> {
     const turn = this.tail.then(f, f);
@@ -93,7 +101,7 @@ export class NativeAnnotationService {
         requireValue(this.alive, "插件正在关闭");
         requireValue(
           this.oauth.isAuthorized(),
-          "请先在 Zotero Feishu Sync 设置中点击“连接飞书”完成授权",
+          "请先在 zotero-feishu-note 设置中点击“连接飞书”完成授权",
         );
         const missing = this.oauth.missingAnnotationScopes();
         requireValue(
@@ -146,6 +154,25 @@ export class NativeAnnotationService {
             relaxed: settings.relaxed,
             includeHighlights: settings.includeHighlights,
             canWrite: () => this.alive && !annotationScopeReason(item),
+            ...(getPref("syncDeletedAnnotations")
+              ? {
+                  confirmDeleted: (key: string, fresh?: boolean) =>
+                    this.deletions.isDeleted(key, fresh),
+                  canReconcileDeletions: () =>
+                    Boolean(getPref("syncDeletedAnnotations")),
+                  canDelete: () => {
+                    requireValue(
+                      getPref("syncDeletedAnnotations"),
+                      "批注删除同步已关闭",
+                    );
+                    const missing = this.oauth.missingAnnotationScopes(true);
+                    requireValue(
+                      !missing.length,
+                      "请点击补充授权，允许删除飞书评论: " + missing.join(", "),
+                    );
+                  },
+                }
+              : {}),
           },
         );
         result.errors = details
@@ -153,7 +180,9 @@ export class NativeAnnotationService {
           .map((d) => d.annotationKey + ": " + d.error);
         result.outcome = result.errors.length
           ? "partial"
-          : details.some((d) => d.status === "synced")
+          : details.some((d) =>
+                ["synced", "deleted", "resolved"].includes(d.status),
+              )
             ? "updated"
             : "unchanged";
       } catch (error) {

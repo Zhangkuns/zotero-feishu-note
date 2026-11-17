@@ -3,6 +3,7 @@ import { CredentialStore } from "./credentialStore";
 import {
   FeishuDeviceAuth,
   ANNOTATION_SCOPES,
+  ANNOTATION_DELETE_SCOPE,
   InvalidFeishuApplicationError,
   type ProgressCallback,
   type RegisteredApp,
@@ -80,13 +81,18 @@ export class OAuthService {
     return Boolean(this.credentials.getTokens()?.refreshToken);
   }
 
-  missingAnnotationScopes(): string[] {
+  missingAnnotationScopes(includeDeletion = false): string[] {
     const granted = new Set(
       (this.credentials.getTokens()?.scope || "")
         .split(/[\s,]+/)
         .filter(Boolean),
     );
-    return ANNOTATION_SCOPES.filter((scope) => !granted.has(scope));
+    return [
+      ...ANNOTATION_SCOPES.filter((scope) => !granted.has(scope)),
+      ...(includeDeletion && !granted.has(ANNOTATION_DELETE_SCOPE)
+        ? [ANNOTATION_DELETE_SCOPE]
+        : []),
+    ];
   }
 
   clearAuthorization(): void {

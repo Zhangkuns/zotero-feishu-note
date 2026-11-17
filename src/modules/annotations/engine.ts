@@ -1,5 +1,6 @@
 import { hashValue } from "../../utils/hash";
 import { FeishuError } from "../feishu/transport";
+import { reconcileDeletions } from "./deletions";
 import {
   type AnnotationClient,
   commentText,
@@ -43,6 +44,9 @@ export interface AnnotationOptions {
   relaxed: boolean;
   includeHighlights: boolean;
   canWrite?: () => boolean;
+  confirmDeleted?: (key: string, fresh?: boolean) => Promise<boolean>;
+  canDelete?: () => void;
+  canReconcileDeletions?: () => boolean;
 }
 export class AnnotationEngine {
   constructor(
@@ -57,7 +61,26 @@ export class AnnotationEngine {
     let { blocks } = await this.client.snapshot(input.documentId);
     let cards: any[] | undefined;
     const results: AnnotationDetail[] = [];
+    let blocked = new Set<string>();
+    if (options.confirmDeleted) {
+      cards = await this.client.comments(input.documentId);
+      const deletion = await reconcileDeletions(
+        input,
+        state,
+        options,
+        this.client,
+        this.store,
+        cards,
+      );
+      results.push(...deletion.details);
+      blocked = deletion.blocked;
+      ({ blocks } = await this.client.snapshot(input.documentId));
+    }
     for (const a of input.annotations) {
+      if (blocked.has(a.key)) continue;
+      const identity = [input.itemKey, input.documentId, a.key].join(":");
+      if (state.records[identity]?.phase === "deleted" && !options.dryRun)
+        delete state.records[identity];
       const result: AnnotationDetail = {
         annotationKey: a.key,
         status: "pending",
@@ -302,7 +325,7 @@ export class AnnotationEngine {
       "等待恢复重复评论对应的主评论",
     );
     const current = replyText(root);
-    const remoteHash = oldMarker.split("#zfs=")[1];
+    const remoteHash = oldMarker.split("#zfs=")[1]?.split("&")[0];
     const trustworthy =
       current === expected ||
       current === record.lastComment ||
@@ -325,6 +348,10 @@ export class AnnotationEngine {
         a.comment,
         marker,
       );
+    }
+    if (oldMarker.includes("&deleted=1")) {
+      check();
+      await this.client.resolve(doc, commentId, false);
     }
     const rootAfter = await this.client.rootReply(doc, commentId);
     requireValue(

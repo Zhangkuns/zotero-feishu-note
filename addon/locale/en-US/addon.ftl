@@ -1,4 +1,4 @@
-menu-root = Feishu Sync
+menu-root = zotero-feishu-note
 menu-sync-selected = Sync selected items
 menu-sync-collection = Sync current collection to Feishu
 menu-open-document = Open Feishu document

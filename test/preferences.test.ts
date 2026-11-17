@@ -2,7 +2,7 @@ import { assert } from "chai";
 import { config } from "../package.json";
 import { getPref, setPref } from "../src/utils/prefs";
 
-const PREFERENCE_PANE_ID = "zotero-feishu-preferences";
+const PREFERENCE_PANE_ID = "zotero-feishu-note-preferences";
 
 describe("preferences", function () {
   this.timeout(10_000);
@@ -50,8 +50,12 @@ describe("preferences", function () {
       assert.lengthOf(document.querySelectorAll(".connection-action"), 1);
       for (const id of [
         "test-connection",
+        "check-updates",
+        "automatic-updates",
+        "current-version",
         "auto-annotations",
         "enable-annotations",
+        "delete-annotations",
         "annotation-scope",
         "annotation-collection",
         "annotation-delay",
@@ -89,6 +93,9 @@ describe("preferences", function () {
       const enabled = document.getElementById(
         "zotero-feishu-enable-annotations",
       ) as HTMLInputElement;
+      const deletion = document.getElementById(
+        "zotero-feishu-delete-annotations",
+      ) as HTMLInputElement;
       const mode = document.getElementById(
         "zotero-feishu-auto-annotations",
       ) as HTMLSelectElement;
@@ -103,6 +110,7 @@ describe("preferences", function () {
       ) as HTMLButtonElement;
       const previous = {
         enabled: getPref("enableAnnotationSync"),
+        deletion: getPref("syncDeletedAnnotations"),
         auto: getPref("autoSyncAnnotations"),
         scope: getPref("annotationScope"),
       };
@@ -116,8 +124,12 @@ describe("preferences", function () {
         assert.isFalse(getPref("enableAnnotationSync"));
         assert.isTrue(manual.disabled);
         assert.isTrue(mode.disabled);
+        assert.isTrue(deletion.disabled);
         enabled.checked = true;
         change(enabled);
+        deletion.checked = false;
+        change(deletion);
+        assert.isFalse(getPref("syncDeletedAnnotations"));
         mode.value = "manual";
         change(mode);
         assert.isFalse(getPref("autoSyncAnnotations"));
@@ -134,8 +146,35 @@ describe("preferences", function () {
         change(mode);
         assert.isTrue(getPref("autoSyncAnnotations"));
         assert.isFalse(delay.disabled);
+        const services = (Zotero.getMainWindow() as any).Services;
+        const screenshot = services.env.get("ZFS_UI_SCREENSHOT_PATH");
+        if (screenshot) {
+          const win = preferencesWindow as any;
+          const canvas = document.createElementNS(
+            "http://www.w3.org/1999/xhtml",
+            "canvas",
+          ) as HTMLCanvasElement;
+          canvas.width = win.innerWidth;
+          canvas.height = win.innerHeight;
+          const context = canvas.getContext("2d") as any;
+          context.drawWindow(
+            win,
+            0,
+            0,
+            win.innerWidth,
+            win.innerHeight,
+            "white",
+          );
+          const bytes = new Uint8Array(
+            await (
+              await win.fetch(canvas.toDataURL("image/png"))
+            ).arrayBuffer(),
+          );
+          await win.IOUtils.write(screenshot, bytes);
+        }
       } finally {
         setPref("enableAnnotationSync", previous.enabled);
+        setPref("syncDeletedAnnotations", previous.deletion);
         setPref("autoSyncAnnotations", previous.auto);
         setPref("annotationScope", previous.scope);
       }

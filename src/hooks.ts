@@ -1,8 +1,9 @@
 import { getLocaleID, initLocale } from "./utils/locale";
 import { registerPrefsScripts } from "./modules/preferenceScript";
 import { registerMenus, unregisterMenus } from "./modules/menu";
+import { migrateLegacyState } from "./modules/pluginUpdates";
 
-const preferencePaneID = "zotero-feishu-preferences";
+const preferencePaneID = "zotero-feishu-note-preferences";
 
 function unregisterPreferencePane(): void {
   const paneIDs = Zotero.PreferencePanes.pluginPanes
@@ -31,6 +32,7 @@ async function onStartup() {
   ]);
 
   initLocale();
+  await migrateLegacyState();
   unregisterPreferencePane();
   addon.data.preferencePaneID = await Zotero.PreferencePanes.register({
     id: preferencePaneID,
@@ -41,6 +43,7 @@ async function onStartup() {
   });
   addon.syncStatus.register();
   addon.annotations.register();
+  addon.updates.start();
 
   await Promise.all(
     Zotero.getMainWindows().map((win) => onMainWindowLoad(win)),
@@ -63,6 +66,7 @@ async function onMainWindowUnload(win: Window): Promise<void> {
 
 function onShutdown(): void {
   addon.annotations.unregister();
+  addon.updates.stop();
   unregisterPreferencePane();
   addon.sync.unregister();
   addon.syncStatus.unregister();

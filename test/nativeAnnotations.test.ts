@@ -64,6 +64,21 @@ class FakeClient {
   loseCreate = false;
   failPatch = false;
   resolutions = 0;
+  deletions = 0;
+  failDelete = false;
+  async deleteReply(_doc: string, id: string, reply: string) {
+    if (!this.roots[id]) throw new FeishuError("not found", 404, 1069307);
+    assert.equal(reply, this.roots[id].reply_id);
+    delete this.roots[id];
+    this.cards = this.cards.filter(
+      (c) => c.comment_id !== id || this.repliesById[id]?.length,
+    );
+    this.deletions++;
+    if (this.failDelete) {
+      this.failDelete = false;
+      throw new Error("lost deletion response");
+    }
+  }
   repliesById: Record<string, any[]> = {};
   async document() {
     return { revision_id: this.revision };
@@ -81,10 +96,13 @@ class FakeClient {
     return clone(this.roots[id]);
   }
   async replies(_doc: string, id: string) {
-    return clone([this.roots[id], ...(this.repliesById[id] || [])]);
+    return clone([
+      ...(this.roots[id] ? [this.roots[id]] : []),
+      ...(this.repliesById[id] || []),
+    ]);
   }
-  async resolve(_doc: string, id: string) {
-    this.cards.find((c) => c.comment_id === id).is_solved = true;
+  async resolve(_doc: string, id: string, solved = true) {
+    this.cards.find((c) => c.comment_id === id).is_solved = solved;
     this.resolutions++;
   }
   setRoot(id: string, text: string, marker: string) {
@@ -656,5 +674,236 @@ describe("native selected-range annotations", function () {
     store.save = save;
     assert.equal((await sync()).status, "synced");
     assert.equal(client.creates, 1);
+  });
+
+  const deletionOptions = (confirmed = true) => ({
+    ...options,
+    confirmDeleted: async () => confirmed,
+  });
+
+  it("deletes the associated root after a cloud-confirmed source deletion", async function () {
+    await sync();
+    source.annotations = [];
+    const before = characterSignature(
+      client.blocks[0].text.elements,
+      "comment1",
+    );
+    const result = await engine.sync(source, state, deletionOptions());
+    assert.equal(result[0].status, "deleted");
+    assert.equal(client.deletions, 1);
+    assert.equal(client.creates, 1);
+    assert.equal(
+      characterSignature(client.blocks[0].text.elements, "comment1"),
+      before,
+    );
+    assert.equal(
+      state.records["PAPER123:Document123:ANNOT123"].phase,
+      "deleted",
+    );
+    await engine.sync(source, state, deletionOptions());
+    assert.equal(client.deletions, 1);
+  });
+
+  it("recovers a historical deleted annotation on a fresh computer from the hidden source", async function () {
+    await sync();
+    source.annotations = [];
+    state = emptyAnnotationState();
+    assert.equal(
+      (await engine.sync(source, state, deletionOptions()))[0].status,
+      "deleted",
+    );
+    assert.equal(client.deletions, 1);
+  });
+
+  it("does not treat a missing local annotation as a deletion", async function () {
+    await sync();
+    source.annotations = [];
+    const result = await engine.sync(source, state, deletionOptions(false));
+    assert.equal(result[0].status, "pending");
+    assert.equal(client.deletions, 0);
+    assert.equal(client.resolutions, 0);
+  });
+
+  it("preserves follow-up replies and resolves their discussion", async function () {
+    await sync();
+    source.annotations = [];
+    client.repliesById.comment1 = [{ reply_id: "another-person" }];
+    const result = await engine.sync(source, state, deletionOptions());
+    assert.equal(result[0].status, "resolved");
+    assert.equal(client.deletions, 0);
+    assert.equal(client.resolutions, 1);
+    assert.equal(client.repliesById.comment1[0].reply_id, "another-person");
+    assert.include(
+      sourceMarker(client.roots.comment1, "ANNOT123")!,
+      "&deleted=1",
+    );
+    assert.equal(replyText(client.roots.comment1), "中文 comment.\n");
+    await engine.sync(source, state, deletionOptions());
+    assert.equal(client.resolutions, 1);
+  });
+
+  it("suppresses resurrection from a computer that still has a stale annotation", async function () {
+    await sync();
+    const result = await engine.sync(
+      source,
+      emptyAnnotationState(),
+      deletionOptions(),
+    );
+    assert.equal(result[0].status, "deleted");
+    assert.equal(client.creates, 1);
+    await engine.sync(source, state, deletionOptions());
+    assert.equal(client.creates, 1);
+  });
+
+  it("supports restoring a confirmed annotation after deletion", async function () {
+    const a = source.annotations[0];
+    await sync();
+    source.annotations = [];
+    await engine.sync(source, state, deletionOptions());
+    source.annotations = [a];
+    const result = await engine.sync(source, state, deletionOptions(false));
+    assert.equal(result[0].status, "synced");
+    assert.equal(client.creates, 2);
+  });
+
+  it("reopens a retained discussion when its source annotation is restored", async function () {
+    const a = source.annotations[0];
+    await sync();
+    source.annotations = [];
+    client.repliesById.comment1 = [{ reply_id: "follow-up" }];
+    await engine.sync(source, state, deletionOptions());
+    source.annotations = [a];
+    await engine.sync(source, state, deletionOptions(false));
+    assert.isFalse(client.cards[0].is_solved);
+    assert.notInclude(
+      sourceMarker(client.roots.comment1, "ANNOT123")!,
+      "&deleted=1",
+    );
+    assert.equal(client.creates, 1);
+  });
+
+  it("preserves remote edits instead of silently deleting them", async function () {
+    await sync();
+    source.annotations = [];
+    const marker = sourceMarker(client.roots.comment1, "ANNOT123")!;
+    client.setRoot("comment1", "Edited in Feishu", marker);
+    client.cards[0].reply_list.replies = [clone(client.roots.comment1)];
+    const result = await engine.sync(source, state, deletionOptions());
+    assert.equal(result[0].status, "pending");
+    assert.equal(client.deletions, 0);
+    assert.equal(client.resolutions, 0);
+  });
+
+  it("does not delete comments owned by a different Zotero account", async function () {
+    await sync();
+    source.annotations = [];
+    source.userId = "999";
+    const result = await engine.sync(
+      source,
+      emptyAnnotationState(),
+      deletionOptions(),
+    );
+    assert.deepEqual(result, []);
+    assert.equal(client.deletions, 0);
+  });
+
+  it("previews deletion without writing or persisting checkpoints", async function () {
+    await sync();
+    source.annotations = [];
+    const before = JSON.stringify(state);
+    const result = await engine.sync(source, state, {
+      ...deletionOptions(),
+      dryRun: true,
+    });
+    assert.equal(result[0].status, "would-delete");
+    assert.equal(client.deletions, 0);
+    assert.equal(JSON.stringify(state), before);
+  });
+
+  it("recovers from a lost DELETE response without repeating creation", async function () {
+    await sync();
+    source.annotations = [];
+    client.failDelete = true;
+    assert.equal(
+      (await engine.sync(source, state, deletionOptions()))[0].status,
+      "pending",
+    );
+    assert.equal(
+      (await engine.sync(source, state, deletionOptions()))[0].status,
+      "unchanged",
+    );
+    assert.equal(client.deletions, 1);
+    assert.equal(client.creates, 1);
+  });
+
+  it("stops deletion if its dedicated switch changes while checking", async function () {
+    await sync();
+    source.annotations = [];
+    const result = await engine.sync(source, state, {
+      ...deletionOptions(),
+      canReconcileDeletions: () => false,
+    });
+    assert.equal(result[0].status, "pending");
+    assert.equal(client.deletions, 0);
+    assert.equal(client.resolutions, 0);
+  });
+
+  it("reports missing deletion permission while retaining the root", async function () {
+    await sync();
+    source.annotations = [];
+    const result = await engine.sync(source, state, {
+      ...deletionOptions(),
+      canDelete: () => {
+        throw new Error("补充授权");
+      },
+    });
+    assert.equal(result[0].status, "pending");
+    assert.include(result[0].error!, "补充授权");
+    assert.equal(client.deletions, 0);
+  });
+
+  it("stops if the cloud annotation is restored immediately before deletion", async function () {
+    await sync();
+    source.annotations = [];
+    const result = await engine.sync(source, state, {
+      ...options,
+      confirmDeleted: async (_key: string, fresh?: boolean) => !fresh,
+    });
+    assert.equal(result[0].status, "pending");
+    assert.equal(client.deletions, 0);
+  });
+
+  it("converges concurrent deletion attempts from independent computers", async function () {
+    await sync();
+    source.annotations = [];
+    const otherState = emptyAnnotationState(),
+      otherEngine = new AnnotationEngine(client, new MemoryStore());
+    const results = await Promise.all([
+      engine.sync(source, state, deletionOptions()),
+      otherEngine.sync(source, otherState, deletionOptions()),
+    ]);
+    assert.isFalse(results.flat().some((r) => r.status === "pending"));
+    assert.equal(client.deletions, 1);
+    assert.equal(client.creates, 1);
+    assert.equal(
+      otherState.records["PAPER123:Document123:ANNOT123"].phase,
+      "deleted",
+    );
+  });
+
+  it("retains and resolves a reply arriving in the deletion race window", async function () {
+    await sync();
+    source.annotations = [];
+    const remove = client.deleteReply.bind(client);
+    client.deleteReply = async (doc, comment, reply) => {
+      client.repliesById.comment1 = [{ reply_id: "late-reply" }];
+      await remove(doc, comment, reply);
+    };
+    const result = await engine.sync(source, state, deletionOptions());
+    assert.equal(result[0].status, "resolved");
+    assert.equal(client.repliesById.comment1[0].reply_id, "late-reply");
+    assert.isTrue(client.cards[0].is_solved);
+    const again = await engine.sync(source, state, deletionOptions());
+    assert.equal(again[0].status, "unchanged");
   });
 });

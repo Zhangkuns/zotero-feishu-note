@@ -8,7 +8,8 @@ export interface AnnotationClient {
   comments(doc: string): Promise<any[]>;
   rootReply(doc: string, comment: string): Promise<any>;
   replies(doc: string, comment: string): Promise<any[]>;
-  resolve(doc: string, comment: string): Promise<void>;
+  resolve(doc: string, comment: string, solved?: boolean): Promise<void>;
+  deleteReply(doc: string, comment: string, reply: string): Promise<void>;
   create(
     doc: string,
     block: string,
@@ -36,11 +37,11 @@ export function commentText(text: string): string {
   return (text || "Zotero 高亮") + "\n";
 }
 const markerPattern =
-  /\n\[Zotero Feishu Sync\] (https:\/\/www\.zotero\.org\/users\/(?:[0-9]+|local)\/items\/[A-Z0-9]{8}#zfs=[a-f0-9]+(?:&duplicate=[A-Za-z0-9_-]+)?)\n?$/;
+  /\n\[Zotero Feishu Sync\] (https:\/\/www\.zotero\.org\/users\/(?:[0-9]+|local)\/items\/[A-Z0-9]{8}#zfs=[a-f0-9]+(?:&duplicate=[A-Za-z0-9_-]+)?(?:&deleted=1)?)\n?$/;
 const hiddenPattern =
   /\u2063\u2060\u2063([\uFE00-\uFE0F]+)\u2063\u2064\u2063(?=\n?$)/;
 const validSource =
-  /^https:\/\/www\.zotero\.org\/users\/(?:[0-9]+|local)\/items\/[A-Z0-9]{8}(?:#zfs=[a-f0-9]+(?:&duplicate=[A-Za-z0-9_-]+)?)?$/;
+  /^https:\/\/www\.zotero\.org\/users\/(?:[0-9]+|local)\/items\/[A-Z0-9]{8}(?:#zfs=[a-f0-9]+(?:&duplicate=[A-Za-z0-9_-]+)?(?:&deleted=1)?)?$/;
 export function hiddenMarker(marker: string): string {
   requireValue(
     marker.length <= 2048 && /^[\x20-\x7E]+$/.test(marker),
@@ -110,9 +111,23 @@ export function sourceMarker(reply: any, key: string): string | undefined {
       new RegExp(
         "^https://www\\.zotero\\.org/users/(?:[0-9]+|local)/items/" +
           key +
-          "(?:#zfs=[a-f0-9]+(?:&duplicate=[A-Za-z0-9_-]+)?)?$",
+          "(?:#zfs=[a-f0-9]+(?:&duplicate=[A-Za-z0-9_-]+)?(?:&deleted=1)?)?$",
       ).test(url),
     );
+}
+export function sourceIdentity(
+  reply: any,
+): { user: string; key: string; marker: string } | undefined {
+  const candidates = [
+    hiddenSourceMarker(reply),
+    rawReplyText(reply).match(markerPattern)?.[1],
+    ...(reply.content?.elements || []).map((e: any) => e.docs_link?.url),
+  ];
+  for (const marker of candidates) {
+    if (typeof marker !== "string" || !validSource.test(marker)) continue;
+    const m = marker.match(/\/users\/([0-9]+|local)\/items\/([A-Z0-9]{8})/)!;
+    return { user: m[1], key: m[2], marker };
+  }
 }
 export class FeishuAnnotationClient implements AnnotationClient {
   constructor(private readonly transport: FeishuTransport) {}
@@ -260,7 +275,7 @@ export class FeishuAnnotationClient implements AnnotationClient {
     }
     throw new Error("too many comment replies");
   }
-  async resolve(doc: string, comment: string): Promise<void> {
+  async resolve(doc: string, comment: string, solved = true): Promise<void> {
     await this.transport.waitForDocumentWrite();
     await this.request(
       "PATCH",
@@ -268,7 +283,23 @@ export class FeishuAnnotationClient implements AnnotationClient {
         "/comments/" +
         encodeURIComponent(comment) +
         "?file_type=docx",
-      { is_solved: true },
+      { is_solved: solved },
+    );
+  }
+  async deleteReply(
+    doc: string,
+    comment: string,
+    reply: string,
+  ): Promise<void> {
+    await this.transport.waitForDocumentWrite();
+    await this.request(
+      "DELETE",
+      this.path(doc) +
+        "/comments/" +
+        encodeURIComponent(comment) +
+        "/replies/" +
+        encodeURIComponent(reply) +
+        "?file_type=docx",
     );
   }
   async create(

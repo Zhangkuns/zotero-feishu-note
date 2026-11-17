@@ -1,5 +1,5 @@
-menu-root = Feishu Sync
-    .label = Feishu Sync
+menu-root = zotero-feishu-note
+    .label = zotero-feishu-note
 menu-sync-selected = Sync selected items
     .label = Sync selected items
 menu-sync-collection = Sync current collection to Feishu

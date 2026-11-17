@@ -10,6 +10,7 @@ export class AnnotationObserver {
   private readonly timers = new Map<number, ReturnType<typeof setTimeout>>();
   private alive = false;
   private retryTimer?: ReturnType<typeof setTimeout>;
+  private discoveryTimer?: ReturnType<typeof setTimeout>;
 
   register(): void {
     if (this.observerID) return;
@@ -18,6 +19,24 @@ export class AnnotationObserver {
     this.observerID = Zotero.Notifier.registerObserver(
       {
         notify: (event, type, ids) => {
+          if (
+            this.alive &&
+            annotationSettings().auto &&
+            ((type === "item" && (event === "delete" || event === "trash")) ||
+              (type === "sync" && String(event) === "finish"))
+          ) {
+            addon.sync.annotations.requestDiscovery();
+            if (this.discoveryTimer) clearTimeout(this.discoveryTimer);
+            this.discoveryTimer = setTimeout(() => {
+              if (this.alive && annotationSettings().auto)
+                void addon.sync.annotations
+                  .retryPending()
+                  .catch((e) =>
+                    ztoolkit.log("Deletion reconciliation failed", e),
+                  );
+            }, annotationSettings().delay);
+            return;
+          }
           if (
             !this.alive ||
             !annotationSettings().auto ||
@@ -60,7 +79,7 @@ export class AnnotationObserver {
           }
         },
       },
-      ["item"],
+      ["item", "sync"],
       "zotero-feishu-annotation-sync",
     );
   }
@@ -68,6 +87,7 @@ export class AnnotationObserver {
   unregister(): void {
     this.alive = false;
     if (this.retryTimer) clearTimeout(this.retryTimer);
+    if (this.discoveryTimer) clearTimeout(this.discoveryTimer);
     if (this.observerID) Zotero.Notifier.unregisterObserver(this.observerID);
     this.observerID = undefined;
     for (const timer of this.timers.values()) clearTimeout(timer);

@@ -17,9 +17,11 @@ export const ANNOTATION_SCOPES = [
   "docs:document.comment:create",
   "docs:document.comment:update",
 ] as const;
+export const ANNOTATION_DELETE_SCOPE = "docs:document.comment:delete";
 
 export const FEISHU_SCOPES = [
   ...ANNOTATION_SCOPES,
+  ANNOTATION_DELETE_SCOPE,
   "docx:document",
   "docx:document.block:convert",
   "docs:document.media:upload",

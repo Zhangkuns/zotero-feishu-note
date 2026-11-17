@@ -47,6 +47,33 @@
 
   <html:section
     class="settings-section"
+    aria-labelledby="zotero-feishu-update-heading"
+  >
+    <html:h3
+      id="zotero-feishu-update-heading"
+      data-l10n-id="pref-updates-title"
+    />
+    <html:p id="zotero-feishu-current-version" />
+    <html:div class="status-line">
+      <html:button
+        id="zotero-feishu-check-updates"
+        data-l10n-id="pref-check-updates"
+      />
+      <html:button
+        id="zotero-feishu-install-update"
+        data-l10n-id="pref-install-update"
+        hidden="true"
+      />
+    </html:div>
+    <html:label class="settings-check"
+      ><html:input id="zotero-feishu-automatic-updates" type="checkbox" />
+      <html:span data-l10n-id="pref-automatic-updates" />
+    </html:label>
+    <html:p data-l10n-id="pref-updates-help" />
+    <html:p id="zotero-feishu-update-status" aria-live="polite" />
+  </html:section>
+  <html:section
+    class="settings-section"
     aria-labelledby="zotero-feishu-target-heading"
   >
     <html:div class="section-heading">
@@ -88,6 +115,11 @@
         <html:option value="manual" data-l10n-id="pref-mode-manual" />
       </html:select>
     </html:div>
+    <html:label class="settings-check"
+      ><html:input id="zotero-feishu-delete-annotations" type="checkbox" />
+      <html:span data-l10n-id="pref-delete-annotations" />
+    </html:label>
+    <html:p data-l10n-id="pref-delete-annotations-help" />
     <html:div class="settings-field">
       <html:label
         for="zotero-feishu-annotation-scope"

@@ -1,10 +1,10 @@
-# Zotero Feishu Sync
+# zotero-feishu-note
 
 [简体中文](doc/README-zhCN.md)
 
-Zotero Feishu Sync is an unofficial Zotero plugin that publishes literature
+zotero-feishu-note is an unofficial Zotero plugin that publishes literature
 metadata, notes, images, and PDF attachments to Feishu cloud documents. This
-0.8.0-beta.2 fork also synchronizes PDF / HTML snapshot text annotations as
+0.8.0-beta.3 fork also synchronizes PDF / HTML snapshot text annotations as
 sentence-level comments in an existing English paper document. It uses the
 original plugin’s Feishu OAuth and API client directly. No CLI, Python, or
 bridge service is required.
@@ -22,22 +22,24 @@ Other items retain the original document-export behavior. See
 
 ## Installation
 
-1. Install the `zotero-feishu-sync.xpi` from this candidate’s artifact directory.
-   This fork has not been published to the upstream GitHub releases.
+1. Install the `zotero-feishu-note.xpi` from this candidate’s artifact directory.
+   Download the versioned XPI from Zhangkuns/zotero-feishu-note releases.
 2. In Zotero, open **Tools → Plugins**.
 3. Choose **Install Add-on From File**, select the XPI, and restart Zotero if
    requested.
 
 ## Connect Feishu
 
-1. Open **Zotero Settings → Zotero Feishu Sync** and select **Connect Feishu**.
+1. Open **Zotero Settings → zotero-feishu-note** and select **Connect Feishu**.
 2. Confirm creation of the dedicated personal application in the browser.
 3. If the Feishu permission console opens, enable the listed permissions and
    complete any required app publication or administrator approval.
 4. Complete account authorization in the browser and return to Zotero.
 
 Existing users should use **Grant comment permissions** when prompted. Comment
-read, create, and update permissions are added to the original OAuth scopes.
+read, create, update, and delete permissions are added to the original OAuth scopes.
+Deleting a source annotation removes an untouched comment without follow-up replies;
+threads with replies are preserved and resolved after Zotero confirms the deletion.
 No App ID, App Secret, or redirect URL needs to be entered manually. Leave the
 target folder empty to use the root of My Space, or enter a Feishu Drive folder
 URL or token.
@@ -45,7 +47,7 @@ URL or token.
 ## Usage
 
 - Right-click a regular Zotero item, child note, or child attachment and choose
-  **Feishu Sync → Sync selected items**.
+  **zotero-feishu-note → Sync selected items**.
 - Right-click a collection and choose **Sync current collection to Feishu**.
 - Use the same item menu to open or explicitly delete its mapped document.
 - Check the Feishu status column for syncing, success, or failure details.
@@ -128,3 +130,33 @@ Production packages and update manifests are written to `.scaffold/build/`.
 AGPL-3.0-or-later. See `THIRD_PARTY_NOTICES.md` for incorporated third-party
 software notices. Feishu and its logo are trademarks of their respective owner;
 this project is not affiliated with or endorsed by Feishu.
+
+## Identity, migration and updates
+
+This fork uses `zotero-feishu-note@zhangkuns.github.io`, independently of the original
+`zotero-feishu@wu-uk.github.io`. Uninstall/disable Zotero Feishu Sync before using it,
+install this XPI and connect Feishu. The bibliography is untouched. Local association
+files are copied once to `<profile>/zotero-feishu-note`; original files are retained.
+Remote source markers recover existing comments after authorization.
+
+The **Plugin updates** section above **Sync location** shows the current version,
+**Check for updates**, an available-update install button and a default-enabled
+**Automatically check for and install plugin updates** checkbox. The native Zotero
+add-on manager validates identity, compatibility and the SHA-512 update hash.
+The plugin checks one minute after startup and daily, and stops its own background
+checks when disabled. Normal Zotero add-on update controls apply to the same add-on.
+
+The HTTPS update feed is the `update.json` asset in this repository's `updates`
+release. Versioned XPI assets are immutable prereleases; the feed points to the
+current preview. Publisher workflow after increasing the version and committing:
+
+```sh
+npm run lint:check
+npm run build
+# Run the documented isolated-host tests, commit and push the reviewed source.
+npm run publish:update             # validate and prepare metadata only
+npm run publish:update -- --publish # publish XPI/source and update the feed
+```
+
+Publishing requires the maintainer's existing `gh` login. Users need only Zotero;
+no GitHub login, CLI, Python, or bridge is used for updates.

@@ -1,4 +1,5 @@
 import { assert } from "chai";
+import { ZoteroAnnotationDeletions } from "../src/modules/annotations/deletionSource";
 import { config } from "../package.json";
 import {
   FeishuAnnotationClient,
@@ -243,5 +244,81 @@ describe("native annotation API and persistence", function () {
       setPref("annotationDelaySeconds", oldDelay);
       setPref("annotationRetrySeconds", oldRetry);
     }
+  });
+
+  it("uses the documented DELETE reply endpoint with native authorization", async function () {
+    const requests: any[] = [];
+    Zotero.HTTP.request = (async (
+      method: string,
+      url: string,
+      options: any,
+    ) => {
+      requests.push({ method, url, token: options.headers.Authorization });
+      return { status: 200, response: { code: 0, data: {} } };
+    }) as any;
+    await client().deleteReply("Doc", "Comment", "Reply");
+    assert.deepEqual(requests, [
+      {
+        method: "DELETE",
+        url: "https://open.feishu.cn/open-apis/drive/v1/files/Doc/comments/Comment/replies/Reply?file_type=docx",
+        token: "Bearer native-test-token",
+      },
+    ]);
+  });
+
+  it("requests deletion permission separately without disabling existing sync", function () {
+    const oauth = new OAuthService(undefined, {
+      getTokens: () => ({ scope: ANNOTATION_SCOPES.join(" ") }),
+    } as any);
+    assert.deepEqual(oauth.missingAnnotationScopes(), []);
+    assert.deepEqual(oauth.missingAnnotationScopes(true), [
+      "docs:document.comment:delete",
+    ]);
+    assert.include(FEISHU_SCOPES, "docs:document.comment:delete");
+  });
+
+  it("requires a cloud tombstone and checks that an item has not been restored", async function () {
+    let restored = false,
+      logCalls = 0;
+    const d = new ZoteroAnnotationDeletions({
+      user: () => 42,
+      apiKey: async () => "test-key",
+      now: () => 1000,
+      client: () =>
+        ({
+          getDeleted: async () => {
+            logCalls++;
+            return { deleted: { items: ["ANNOT123"] } };
+          },
+          getVersions: async () => ({
+            versions: restored ? { ANNOT123: 2 } : {},
+          }),
+        }) as any,
+    });
+    assert.isTrue(await d.isDeleted("ANNOT123"));
+    assert.isFalse(await d.isDeleted("OTHER123"));
+    assert.equal(logCalls, 1);
+    restored = true;
+    assert.isFalse(await d.isDeleted("ANNOT123", true));
+    assert.equal(logCalls, 2);
+    d.invalidate();
+    await d.isDeleted("OTHER123");
+    assert.equal(logCalls, 3);
+  });
+
+  it("rejects an unavailable deletion log rather than inferring deletion from absence", async function () {
+    const d = new ZoteroAnnotationDeletions({
+      user: () => 42,
+      apiKey: async () => "test-key",
+      now: () => 1000,
+      client: () => ({ getDeleted: async () => false }) as any,
+    });
+    let error: any;
+    try {
+      await d.isDeleted("ANNOT123");
+    } catch (e) {
+      error = e;
+    }
+    assert.include(error.message, "删除日志不可用");
   });
 });

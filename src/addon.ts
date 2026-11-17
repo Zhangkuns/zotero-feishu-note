@@ -4,6 +4,7 @@ import { SyncService } from "./modules/syncService";
 import { SyncStatusService } from "./modules/syncStatus";
 import { AnnotationObserver } from "./modules/annotationSync";
 import { createZToolkit } from "./utils/ztoolkit";
+import { PluginUpdates } from "./modules/pluginUpdates";
 
 class Addon {
   public data: {
@@ -24,6 +25,7 @@ class Addon {
   public sync: SyncService;
   public syncStatus: SyncStatusService;
   public annotations: AnnotationObserver;
+  public updates: PluginUpdates;
   // APIs
   public api: object;
 
@@ -39,6 +41,7 @@ class Addon {
     this.sync = new SyncService();
     this.syncStatus = new SyncStatusService();
     this.annotations = new AnnotationObserver();
+    this.updates = new PluginUpdates();
     this.api = {};
   }
 }
