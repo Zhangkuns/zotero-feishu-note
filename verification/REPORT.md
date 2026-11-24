@@ -1,3 +1,30 @@
+# zotero-feishu-note beta.4 verification — 2026-11-24 (America/Los_Angeles)
+
+- 144 isolated Zotero 10.0.8 host tests passed. Lint and TypeScript/production
+  build passed separately. New cases cover strict v2 PDF identity, three-document
+  routing, original-source routing, legacy v1 compatibility, per-target failure
+  isolation, Chinese-only mappings and mapping changes during requests.
+- Reading PDF annotations use explicit attachment keys and the matching outline,
+  Chinese or English Feishu document. Original PDF / HTML annotations continue
+  to use the English document. A write revalidates the current mapping note.
+- The existing annotation engine, invisible provenance, independent-machine
+  recovery, deduplication and cloud-confirmed deletion remain in use.
+- Sync history now identifies each annotation's target document. Preferences help
+  describes the three reading destinations. Update channel and plugin ID are unchanged.
+- Six actual historical archives (Circuit Tracing and Looped Transformers, all
+  three modes) were rendered by the companion skill: 327 pages, 123 embedded
+  image occurrences and 647 rendered math containers. Original archive hashes
+  were unchanged; all source images decoded and no MathJax errors or horizontal
+  overflow were reported. Representative pages were visually inspected.
+- PDF rendering is local Pandoc + MathJax + Chromium. It changes pagination and
+  wrapping, preserves selectable body text, and does not rewrite the source.
+  Formula-internal / cross-block sentence anchoring is still outside the guarantee.
+- This release's new routing was tested with native Zotero items/annotations and
+  controlled Feishu snapshots. No production Feishu comments were created for
+  the new PDF routes, and historical library attachments were not bulk-replaced.
+- Previous release validation and real deletion observations remain below with
+  their original dates and scope; they are not new live-cloud beta.4 tests.
+
 # zotero-feishu-note beta.3 verification — 2026-11-16 (America/Los_Angeles)
 
 - 139 isolated Zotero 10.0.8 host tests passed, including update checks, installer

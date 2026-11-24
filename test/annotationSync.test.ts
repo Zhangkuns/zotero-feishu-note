@@ -1,6 +1,12 @@
 import { assert } from "chai";
 import { config } from "../package.json";
 import { mappingNote } from "../src/modules/annotationSync";
+import {
+  annotationTargets,
+  validateMapping,
+  uniqueJSON,
+  TITLES,
+} from "../src/modules/annotations/mapping";
 import { SyncService } from "../src/modules/syncService";
 import {
   NativeAnnotationService,
@@ -163,6 +169,211 @@ describe("mapped annotation synchronization", function () {
     created.push(note);
     return note;
   }
+
+  async function pdfPaper() {
+    const item = await paper(false);
+    const note = await addMapping(item);
+    const pre = note.getNote().match(/<pre>(.*?)<\/pre>/s)![1];
+    const data = JSON.parse(pre.replace(/&lt;/g, "<").replace(/&amp;/g, "&"));
+    data.schema = "zotero-feishu-mapping/v2";
+    const english = data.documents["english-original"];
+    english.pdf_attachment_key = english.archive_attachment_key;
+    delete english.archive_attachment_key;
+    const pdf = Zotero.Items.getByLibraryAndKey(
+      item.libraryID,
+      english.pdf_attachment_key,
+    )!;
+    pdf.attachmentContentType = "application/pdf";
+    await pdf.saveTx();
+    for (const mode of ["outline-expanded", "full-translation"] as const) {
+      const attachment = new Zotero.Item("attachment");
+      attachment.parentID = item.id;
+      attachment.attachmentLinkMode =
+        Zotero.Attachments.LINK_MODE_IMPORTED_FILE;
+      attachment.attachmentContentType = "application/pdf";
+      attachment.setField("title", TITLES[mode]);
+      await attachment.saveTx();
+      created.push(attachment);
+      const id = mode === "outline-expanded" ? "Outline123" : "Chinese123";
+      data.documents[mode] = {
+        title: TITLES[mode],
+        document_id: id,
+        url: "https://my.feishu.cn/docx/" + id,
+        pdf_attachment_key: attachment.key,
+      };
+    }
+    const save = async () => {
+      note.setNote(
+        "<p>飞书文档映射</p><pre>" + JSON.stringify(data) + "</pre>",
+      );
+      await note.saveTx();
+    };
+    await save();
+    return { item, note, data, save };
+  }
+
+  it("accepts v2 PDFs and routes every reading mode plus original sources explicitly", async function () {
+    const { item, data } = await pdfPaper();
+    const mapping = mappingNote(item)!.mapping;
+    const targets = annotationTargets(mapping);
+    assert.equal(targets.length, 3);
+    for (const target of targets) {
+      assert.include(
+        target.attachmentKeys,
+        data.documents[target.mode].pdf_attachment_key,
+      );
+      assert.equal(
+        target.attachmentKeys.length,
+        target.mode === "english-original" ? 2 : 1,
+      );
+    }
+    assert.equal(
+      annotationTargets(mapping)[2].document.document_id,
+      "Example123",
+    );
+  });
+
+  it("rejects mixed versions, duplicate PDF keys, unknown fields and live MIME mismatches", async function () {
+    const { item, data } = await pdfPaper();
+    const copy = () => JSON.parse(JSON.stringify(data));
+    const mixed = copy();
+    mixed.documents["english-original"].archive_attachment_key = "ARCHIVE1";
+    assert.throws(() => validateMapping(mixed), "wrong fields");
+    const duplicate = copy();
+    duplicate.documents["full-translation"].pdf_attachment_key =
+      duplicate.documents["english-original"].pdf_attachment_key;
+    assert.throws(() => validateMapping(duplicate), "duplicate");
+    assert.throws(() => uniqueJSON('{"schema":1,"schema":2}'), "duplicate");
+    const pdf = Zotero.Items.getByLibraryAndKey(
+      item.libraryID,
+      data.documents["english-original"].pdf_attachment_key,
+    )!;
+    pdf.attachmentContentType = "text/markdown";
+    await pdf.saveTx();
+    assert.throws(() => mappingNote(item), "阅读附件");
+  });
+
+  it("syncs selected text to all three destinations and isolates one destination failure", async function () {
+    const { item } = await pdfPaper();
+    const mapping = mappingNote(item)!;
+    const targets = annotationTargets(mapping.mapping);
+    for (const target of targets)
+      for (const key of target.attachmentKeys) {
+        const a = await annotation(item, "application/pdf");
+        a.parentID = Zotero.Items.getByLibraryAndKey(item.libraryID, key)!.id;
+        await a.saveTx();
+      }
+    const state = emptyAnnotationState();
+    const visited: string[] = [];
+    let failChinese = false;
+    const client = {
+      snapshot: async (id: string) => {
+        visited.push(id);
+        if (failChinese && id === "Chinese123")
+          throw new Error("offline fixture");
+        return {
+          blocks: [
+            {
+              block_id: id,
+              text: {
+                elements: [{ text_run: { content: "Unique selected words." } }],
+              },
+            },
+          ],
+        };
+      },
+    };
+    const service = new NativeAnnotationService(
+      { isAuthorized: () => true, missingAnnotationScopes: () => [] } as any,
+      client as any,
+      { load: async () => state, save: async () => undefined },
+    );
+    const first = await service.syncItem(item, mapping, true);
+    assert.isEmpty(first.errors);
+    assert.sameMembers(visited, ["Outline123", "Chinese123", "Example123"]);
+    const details = state.history[0].details;
+    assert.equal(details.length, 4);
+    assert.equal(
+      details.filter((d) => d.documentTitle === "英文全文").length,
+      2,
+    );
+    assert.isTrue(
+      details.every((d) => d.status === "matched" && !!d.documentUrl),
+    );
+    failChinese = true;
+    visited.length = 0;
+    const second = await service.syncItem(item, mapping, true);
+    assert.equal(second.outcome, "partial");
+    assert.include(second.errors[0], "中文全文");
+    assert.include(visited, "Example123");
+    assert.equal(state.history[0].details.length, 3);
+  });
+
+  it("stops writes to every target when the mapping changes during a request", async function () {
+    const { item, data, save } = await pdfPaper();
+    const original = mappingNote(item)!;
+    for (const target of annotationTargets(original.mapping)) {
+      const a = await annotation(item, "application/pdf");
+      a.parentID = Zotero.Items.getByLibraryAndKey(
+        item.libraryID,
+        target.attachmentKeys[0],
+      )!.id;
+      await a.saveTx();
+    }
+    let changed = false;
+    let writes = 0;
+    const state = emptyAnnotationState();
+    const client = {
+      snapshot: async (id: string) => {
+        if (!changed) {
+          changed = true;
+          data.documents["outline-expanded"].document_id = "Replaced123";
+          data.documents["outline-expanded"].url =
+            "https://my.feishu.cn/docx/Replaced123";
+          await save();
+        }
+        return {
+          blocks: [
+            {
+              block_id: id,
+              text: {
+                elements: [{ text_run: { content: "Unique selected words." } }],
+              },
+            },
+          ],
+        };
+      },
+      comments: async () => [],
+      create: async () => {
+        writes++;
+        throw new Error("unexpected write");
+      },
+    };
+    const service = new NativeAnnotationService(
+      { isAuthorized: () => true, missingAnnotationScopes: () => [] } as any,
+      client as any,
+      { load: async () => state, save: async () => undefined },
+    );
+    const result = await service.syncItem(item, original);
+    assert.equal(writes, 0);
+    assert.equal(result.outcome, "partial");
+    assert.lengthOf(state.history[0].details, 3);
+    assert.isTrue(
+      state.history[0].details.every((d) => d.error?.includes("映射已变化")),
+    );
+  });
+
+  it("supports a Chinese-only v2 target without inventing an English document", async function () {
+    const { item, data, save } = await pdfPaper();
+    data.documents["outline-expanded"] = null;
+    data.documents["english-original"] = null;
+    data.default_annotation_target = null;
+    await save();
+    const targets = annotationTargets(mappingNote(item)!.mapping);
+    assert.equal(targets.length, 1);
+    assert.equal(targets[0].mode, "full-translation");
+    assert.equal(targets[0].attachmentKeys.length, 1);
+  });
 
   it("reads the versioned JSON pre block and English target", async function () {
     const item = await paper();

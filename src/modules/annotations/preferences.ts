@@ -270,6 +270,23 @@ async function renderHistory(doc: Document): Promise<void> {
           })) + (detail.error ? "\n" + detail.error : ""),
         );
         if (detail.error) line.className = "history-error";
+        if (detail.documentTitle)
+          line.append(create("span", " · " + detail.documentTitle));
+        if (
+          detail.documentUrl &&
+          /^https:\/\/my\.feishu\.cn\/docx\/[A-Za-z0-9]+$/.test(
+            detail.documentUrl,
+          )
+        ) {
+          const button = create(
+            "button",
+            await preferenceText(doc, "pref-history-open"),
+          );
+          button.addEventListener("click", () =>
+            Zotero.launchURL(detail.documentUrl!),
+          );
+          line.append(button);
+        }
         article.append(line);
       }
       if (entry.errors.length) {

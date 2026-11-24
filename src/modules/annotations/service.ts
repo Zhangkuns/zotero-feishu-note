@@ -7,7 +7,12 @@ import {
   ZoteroAnnotationDeletions,
   type AnnotationDeletionSource,
 } from "./deletionSource";
-import { mappingNote, requireValue, type PaperMappingNote } from "./mapping";
+import {
+  annotationTargets,
+  mappingNote,
+  requireValue,
+  type PaperMappingNote,
+} from "./mapping";
 import {
   AnnotationStore,
   type AnnotationStateRepository,
@@ -96,7 +101,7 @@ export class NativeAnnotationService {
       const excluded = annotationScopeReason(item);
       if (excluded) return { ...result, errors: [excluded] };
       const state = await this.store.load();
-      let details: AnnotationHistory["details"] = [];
+      const details: AnnotationHistory["details"] = [];
       try {
         requireValue(this.alive, "插件正在关闭");
         requireValue(
@@ -114,70 +119,98 @@ export class NativeAnnotationService {
           verified?.noteKey === note.noteKey,
           "飞书文档映射已变化，请重试",
         );
-        requireValue(
-          verified.mapping.default_annotation_target === "english-original",
-          "没有可用的英文全文目标",
-        );
-        const target = verified.mapping.documents["english-original"]!;
-        const annotations: AnnotationInput["annotations"] = [];
-        for (const source of verified.mapping.zotero.source_attachments) {
-          const attachment = Zotero.Items.getByLibraryAndKey(
-            item.libraryID,
-            source.key,
-          )!;
-          requireValue(
-            attachment && attachment.isAttachment(),
-            "原文附件不可用",
-          );
-          for (const a of attachment.getAnnotations(false))
-            annotations.push({
-              key: a.key,
-              type: a.annotationType,
-              text: a.annotationText || "",
-              comment: a.annotationComment || "",
-            });
-        }
-        const input: AnnotationInput = {
-          itemKey: item.key,
-          title,
-          documentId: target.document_id,
-          documentUrl: target.url,
-          userId: String(Zotero.Users.getCurrentUserID() || "local"),
-          annotations,
-        };
+        const targets = annotationTargets(verified.mapping);
+        requireValue(targets.length, "没有可用的批注目标文档");
         const settings = annotationSettings();
-        details = await new AnnotationEngine(this.client, this.store).sync(
-          input,
-          state,
-          {
-            dryRun,
-            relaxed: settings.relaxed,
-            includeHighlights: settings.includeHighlights,
-            canWrite: () => this.alive && !annotationScopeReason(item),
-            ...(getPref("syncDeletedAnnotations")
-              ? {
-                  confirmDeleted: (key: string, fresh?: boolean) =>
-                    this.deletions.isDeleted(key, fresh),
-                  canReconcileDeletions: () =>
-                    Boolean(getPref("syncDeletedAnnotations")),
-                  canDelete: () => {
-                    requireValue(
-                      getPref("syncDeletedAnnotations"),
-                      "批注删除同步已关闭",
-                    );
-                    const missing = this.oauth.missingAnnotationScopes(true);
-                    requireValue(
-                      !missing.length,
-                      "请点击补充授权，允许删除飞书评论: " + missing.join(", "),
-                    );
-                  },
-                }
-              : {}),
-          },
+        for (const target of targets) {
+          try {
+            const annotations: AnnotationInput["annotations"] = [];
+            for (const key of target.attachmentKeys) {
+              const attachment = Zotero.Items.getByLibraryAndKey(
+                item.libraryID,
+                key,
+              )!;
+              requireValue(
+                attachment && attachment.isAttachment() && !attachment.deleted,
+                "批注来源附件不可用: " + key,
+              );
+              for (const a of attachment.getAnnotations(false))
+                annotations.push({
+                  key: a.key,
+                  type: a.annotationType,
+                  text: a.annotationText || "",
+                  comment: a.annotationComment || "",
+                });
+            }
+            const input: AnnotationInput = {
+              itemKey: item.key,
+              title,
+              documentId: target.document.document_id,
+              documentUrl: target.document.url,
+              userId: String(Zotero.Users.getCurrentUserID() || "local"),
+              annotations,
+            };
+            const targetDetails = await new AnnotationEngine(
+              this.client,
+              this.store,
+            ).sync(input, state, {
+              dryRun,
+              relaxed: settings.relaxed,
+              includeHighlights: settings.includeHighlights,
+              canWrite: () => {
+                if (!this.alive || annotationScopeReason(item)) return false;
+                const current = mappingNote(item);
+                requireValue(
+                  current?.noteKey === verified.noteKey &&
+                    JSON.stringify(current.mapping) ===
+                      JSON.stringify(verified.mapping),
+                  "飞书文档映射已变化，请重试",
+                );
+                return true;
+              },
+              ...(getPref("syncDeletedAnnotations")
+                ? {
+                    confirmDeleted: (key: string, fresh?: boolean) =>
+                      this.deletions.isDeleted(key, fresh),
+                    canReconcileDeletions: () =>
+                      Boolean(getPref("syncDeletedAnnotations")),
+                    canDelete: () => {
+                      requireValue(
+                        getPref("syncDeletedAnnotations"),
+                        "批注删除同步已关闭",
+                      );
+                      const missing = this.oauth.missingAnnotationScopes(true);
+                      requireValue(
+                        !missing.length,
+                        "请点击补充授权，允许删除飞书评论: " +
+                          missing.join(", "),
+                      );
+                    },
+                  }
+                : {}),
+            });
+            details.push(
+              ...targetDetails.map((d) => ({
+                ...d,
+                documentUrl: target.document.url,
+                documentTitle: target.document.title,
+              })),
+            );
+          } catch (error) {
+            result.errors.push(
+              target.document.title +
+                ": " +
+                (error instanceof Error ? error.message : String(error)),
+            );
+          }
+        }
+        result.errors.push(
+          ...details
+            .filter((d) => d.status === "pending")
+            .map(
+              (d) => d.documentTitle + "/" + d.annotationKey + ": " + d.error,
+            ),
         );
-        result.errors = details
-          .filter((d) => d.status === "pending")
-          .map((d) => d.annotationKey + ": " + d.error);
         result.outcome = result.errors.length
           ? "partial"
           : details.some((d) =>
@@ -240,7 +273,7 @@ export class NativeAnnotationService {
         libraryID: Zotero.Libraries.userLibraryID,
       });
       search.addCondition("itemType", "is", "note");
-      search.addCondition("note", "contains", "zotero-feishu-mapping/v1");
+      search.addCondition("note", "contains", "zotero-feishu-mapping/");
       for (const id of await search.search()) {
         const child = Zotero.Items.get(id);
         const paper = child?.topLevelItem;

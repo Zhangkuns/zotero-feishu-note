@@ -24,6 +24,8 @@ export interface PendingPaper {
   reason: string;
 }
 export interface AnnotationDetail {
+  documentUrl?: string;
+  documentTitle?: string;
   annotationKey: string;
   status:
     | "synced"

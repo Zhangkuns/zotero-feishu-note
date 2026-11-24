@@ -4,24 +4,60 @@ export const TITLES = {
   "english-original": "英文全文",
   "structured-synthesis": "精读笔记",
 } as const;
-export interface PaperMapping {
-  schema: "zotero-feishu-mapping/v1";
+export type MappingMode = keyof typeof TITLES;
+export interface MappingDocument {
+  title: string;
+  document_id: string;
+  url: string;
+}
+type ArchiveDocument = MappingDocument & { archive_attachment_key: string };
+type ReadingDocument = MappingDocument & { pdf_attachment_key: string };
+interface MappingBase {
   zotero: {
     library_id: number;
     item_key: string;
     source_url: string;
     source_attachments: { key: string; content_type: string }[];
   };
-  documents: Record<
-    keyof typeof TITLES,
-    null | {
-      title: string;
-      document_id: string;
-      url: string;
-      archive_attachment_key: string;
-    }
-  >;
   default_annotation_target: "english-original" | null;
+}
+export type PaperMapping = MappingBase &
+  (
+    | {
+        schema: "zotero-feishu-mapping/v1";
+        documents: Record<MappingMode, ArchiveDocument | null>;
+      }
+    | {
+        schema: "zotero-feishu-mapping/v2";
+        documents: Record<MappingMode, ReadingDocument | null>;
+      }
+  );
+export function documentAttachmentKey(
+  document: ArchiveDocument | ReadingDocument,
+): string {
+  return "pdf_attachment_key" in document
+    ? document.pdf_attachment_key
+    : document.archive_attachment_key;
+}
+export interface AnnotationTarget {
+  mode: MappingMode;
+  document: MappingDocument;
+  attachmentKeys: string[];
+}
+/** Explicit attachment keys determine routing; filenames and language guesses do not. */
+export function annotationTargets(mapping: PaperMapping): AnnotationTarget[] {
+  return (Object.keys(TITLES) as MappingMode[]).flatMap((mode) => {
+    const document = mapping.documents[mode];
+    if (!document) return [];
+    const attachmentKeys: string[] = [];
+    if (mapping.schema === "zotero-feishu-mapping/v2")
+      attachmentKeys.push(documentAttachmentKey(document));
+    if (mode === mapping.default_annotation_target)
+      attachmentKeys.push(
+        ...mapping.zotero.source_attachments.map((a) => a.key),
+      );
+    return attachmentKeys.length ? [{ mode, document, attachmentKeys }] : [];
+  });
 }
 export interface PaperMappingNote {
   noteKey: string;
@@ -71,9 +107,13 @@ export function validateMapping(m: any): PaperMapping {
     "mapping",
   );
   requireValue(
-    m.schema === "zotero-feishu-mapping/v1",
+    ["zotero-feishu-mapping/v1", "zotero-feishu-mapping/v2"].includes(m.schema),
     "unsupported mapping schema",
   );
+  const attachmentField =
+    m.schema === "zotero-feishu-mapping/v2"
+      ? "pdf_attachment_key"
+      : "archive_attachment_key";
   const z = m.zotero;
   keys(
     z,
@@ -117,7 +157,7 @@ export function validateMapping(m: any): PaperMapping {
   for (const [mode, title] of Object.entries(TITLES)) {
     const d = m.documents[mode];
     if (d === null) continue;
-    keys(d, ["title", "document_id", "url", "archive_attachment_key"], mode);
+    keys(d, ["title", "document_id", "url", attachmentField], mode);
     requireValue(d.title === title, mode + ": wrong title");
     requireValue(
       typeof d.document_id === "string" && /^[A-Za-z0-9]+$/.test(d.document_id),
@@ -128,13 +168,13 @@ export function validateMapping(m: any): PaperMapping {
       "URL/ID mismatch",
     );
     requireValue(
-      itemKey(d.archive_attachment_key) &&
-        !sourceKeys.includes(d.archive_attachment_key) &&
-        d.archive_attachment_key !== z.item_key,
+      itemKey(d[attachmentField]) &&
+        !sourceKeys.includes(d[attachmentField]) &&
+        d[attachmentField] !== z.item_key,
       "invalid archive key",
     );
     ids.push(d.document_id);
-    archives.push(d.archive_attachment_key);
+    archives.push(d[attachmentField]);
   }
   requireValue(
     ids.length &&
@@ -194,21 +234,27 @@ export function mappingNote(item: Zotero.Item): PaperMappingNote | undefined {
     if (!d) continue;
     const a = Zotero.Items.getByLibraryAndKey(
       item.libraryID,
-      d.archive_attachment_key,
+      documentAttachmentKey(d),
     );
     requireValue(
       a &&
         a.isAttachment() &&
         a.parentID === item.id &&
         a.getField("title") === d.title &&
-        ["text/markdown", "text/plain"].includes(a.attachmentContentType) &&
+        (mapping.schema === "zotero-feishu-mapping/v2"
+          ? a.attachmentContentType === "application/pdf"
+          : ["text/markdown", "text/plain"].includes(
+              a.attachmentContentType,
+            )) &&
         !a.deleted,
-      "Markdown 附件与当前 Zotero 不匹配: " + d.archive_attachment_key,
+      "阅读附件与当前 Zotero 不匹配: " + documentAttachmentKey(d),
     );
   }
   return {
     noteKey: note.key,
     mapping,
-    documentUrl: mapping.documents["english-original"]?.url,
+    documentUrl:
+      mapping.documents["english-original"]?.url ||
+      Object.values(mapping.documents).find((d) => d)?.url,
   };
 }

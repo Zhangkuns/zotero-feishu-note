@@ -4,8 +4,9 @@
 
 zotero-feishu-note is an unofficial Zotero plugin that publishes literature
 metadata, notes, images, and PDF attachments to Feishu cloud documents. This
-0.8.0-beta.3 fork also synchronizes PDF / HTML snapshot text annotations as
-sentence-level comments in an existing English paper document. It uses the
+0.8.0-beta.4 fork also synchronizes text annotations as sentence-level comments.
+Original PDF / HTML snapshots target the English paper document; the three
+reading PDFs target their corresponding outline, Chinese and English documents. It uses the
 original plugin’s Feishu OAuth and API client directly. No CLI, Python, or
 bridge service is required.
 
