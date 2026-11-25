@@ -62,9 +62,9 @@ const notes = resolve(root, ".scaffold/build/release-notes.md");
 await writeFile(
   notes,
   `zotero-feishu-note ${pkg.version}\n\n` +
-    "- Route outline, Chinese and English reading PDF annotations to their corresponding Feishu documents.\n" +
-    "- Preserve original PDF / HTML to English routing and legacy v1 mappings.\n" +
-    "- Validate v2 attachment identity and stop writes when mappings change.\n" +
+    "- Route outline, Chinese and English reading HTML annotations to their corresponding Feishu documents.\n" +
+    "- Preserve original PDF / HTML to English routing and legacy v1 / v2 mappings.\n" +
+    "- Validate v3 HTML attachment identity and stop writes when mappings change.\n" +
     "- Show the destination document for each annotation in sync history.\n" +
     "- Retain cross-machine deduplication, deletion recovery and automatic updates.\n" +
     "- Zotero 10.0.8 host-tested. See verification/REPORT.md for validation boundaries.\n",

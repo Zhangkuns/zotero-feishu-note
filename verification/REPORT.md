@@ -1,3 +1,42 @@
+# zotero-feishu-note beta.5 verification — 2026-11-24 (America/Los_Angeles)
+
+- 148 isolated Zotero 10.0.8 host tests passed. The new real-file test imports
+  standalone HTML without changing its bytes, verifies the snapshot reader type,
+  persists a text annotation, opens the native reader and checks its body and
+  MathML DOM after the actual view initializes.
+- Strict v3 mappings use `html_attachment_key`. Tests cover all three reading
+  destinations, original-source routing, mixed-schema/duplicate/MIME rejection,
+  per-document failure isolation, and preservation of v1 Markdown / v2 PDF routes.
+  Existing native OAuth, hidden provenance, deduplication and deletion are unchanged.
+- Companion skill conversion requires Python and Pandoc (tested with 3.8), with
+  embedded images and native MathML, and no external runtime resources. Six converter
+  regression tests passed, including unchanged-source hashes, verified output reuse,
+  revisions dropping stale attachment keys, and corrupt/invalid input refusal.
+- Ten checks passed against the executable v3 validator extracted from SKILL.md:
+  canonical build/readback, changed readback, legacy/mixed/duplicate/unknown fields,
+  wrong default, URL/ID mismatch and duplicate JSON properties.
+- SKILL.md changes are confined to step 8 (attachment rendering/import/mapping).
+  The preceding 42,370 bytes and following 3,244 bytes match the pre-change backup
+  exactly. Original archives and legacy PDF helpers remain intact.
+- Acceptance example: ARLoop, using the user's selected outline document and its
+  corresponding Chinese/English documents. Readbacks at revisions 45 / 46 / 48
+  match the ordered local body, formulas and image labels after recording only
+  Markdown formatting, equivalent math wrappers, whitespace and resource URLs as
+  representation differences. All 39 HTML image occurrences match archive image
+  bytes and order; formula counts are 179 / 255 / 255.
+- Chromium offline checks at 1100px and 480px confirm every image loads, no merror
+  nodes, no external requests and no page/image horizontal overflow. Representative
+  Chinese/English text, figures/captions and formulas were visually inspected.
+  This is responsive reading HTML; wrapping and typography differ from Markdown
+  source and Feishu. The native-reader test above uses a small controlled fixture.
+- New routing tests use controlled Feishu API snapshots; no production comments
+  were created for this release. Historical annotated attachments/mappings were not
+  replaced. Cloud image pixels were not downloaded/revalidated; image byte checks
+  compare the archive and generated HTML, while cloud checks compare ordered labels
+  and their placement in the full document.
+- Local acceptance readbacks, HTMLs, manifests and screenshots are kept outside the
+  source repository. Historical release validation remains below with its own scope.
+
 # zotero-feishu-note beta.4 verification — 2026-11-24 (America/Los_Angeles)
 
 - 144 isolated Zotero 10.0.8 host tests passed. Lint and TypeScript/production

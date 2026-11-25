@@ -12,6 +12,7 @@ export interface MappingDocument {
 }
 type ArchiveDocument = MappingDocument & { archive_attachment_key: string };
 type ReadingDocument = MappingDocument & { pdf_attachment_key: string };
+type HTMLDocument = MappingDocument & { html_attachment_key: string };
 interface MappingBase {
   zotero: {
     library_id: number;
@@ -31,10 +32,15 @@ export type PaperMapping = MappingBase &
         schema: "zotero-feishu-mapping/v2";
         documents: Record<MappingMode, ReadingDocument | null>;
       }
+    | {
+        schema: "zotero-feishu-mapping/v3";
+        documents: Record<MappingMode, HTMLDocument | null>;
+      }
   );
 export function documentAttachmentKey(
-  document: ArchiveDocument | ReadingDocument,
+  document: ArchiveDocument | ReadingDocument | HTMLDocument,
 ): string {
+  if ("html_attachment_key" in document) return document.html_attachment_key;
   return "pdf_attachment_key" in document
     ? document.pdf_attachment_key
     : document.archive_attachment_key;
@@ -50,7 +56,7 @@ export function annotationTargets(mapping: PaperMapping): AnnotationTarget[] {
     const document = mapping.documents[mode];
     if (!document) return [];
     const attachmentKeys: string[] = [];
-    if (mapping.schema === "zotero-feishu-mapping/v2")
+    if (mapping.schema !== "zotero-feishu-mapping/v1")
       attachmentKeys.push(documentAttachmentKey(document));
     if (mode === mapping.default_annotation_target)
       attachmentKeys.push(
@@ -107,13 +113,19 @@ export function validateMapping(m: any): PaperMapping {
     "mapping",
   );
   requireValue(
-    ["zotero-feishu-mapping/v1", "zotero-feishu-mapping/v2"].includes(m.schema),
+    [
+      "zotero-feishu-mapping/v1",
+      "zotero-feishu-mapping/v2",
+      "zotero-feishu-mapping/v3",
+    ].includes(m.schema),
     "unsupported mapping schema",
   );
   const attachmentField =
-    m.schema === "zotero-feishu-mapping/v2"
-      ? "pdf_attachment_key"
-      : "archive_attachment_key";
+    m.schema === "zotero-feishu-mapping/v3"
+      ? "html_attachment_key"
+      : m.schema === "zotero-feishu-mapping/v2"
+        ? "pdf_attachment_key"
+        : "archive_attachment_key";
   const z = m.zotero;
   keys(
     z,
@@ -241,11 +253,13 @@ export function mappingNote(item: Zotero.Item): PaperMappingNote | undefined {
         a.isAttachment() &&
         a.parentID === item.id &&
         a.getField("title") === d.title &&
-        (mapping.schema === "zotero-feishu-mapping/v2"
-          ? a.attachmentContentType === "application/pdf"
-          : ["text/markdown", "text/plain"].includes(
-              a.attachmentContentType,
-            )) &&
+        (mapping.schema === "zotero-feishu-mapping/v3"
+          ? a.attachmentContentType === "text/html"
+          : mapping.schema === "zotero-feishu-mapping/v2"
+            ? a.attachmentContentType === "application/pdf"
+            : ["text/markdown", "text/plain"].includes(
+                a.attachmentContentType,
+              )) &&
         !a.deleted,
       "阅读附件与当前 Zotero 不匹配: " + documentAttachmentKey(d),
     );

@@ -212,6 +212,110 @@ describe("mapped annotation synchronization", function () {
     return { item, note, data, save };
   }
 
+  async function htmlPaper() {
+    const fixture = await pdfPaper();
+    fixture.data.schema = "zotero-feishu-mapping/v3";
+    for (const document of Object.values(fixture.data.documents) as any[]) {
+      if (!document) continue;
+      document.html_attachment_key = document.pdf_attachment_key;
+      delete document.pdf_attachment_key;
+      const attachment = Zotero.Items.getByLibraryAndKey(
+        fixture.item.libraryID,
+        document.html_attachment_key,
+      )!;
+      attachment.attachmentContentType = "text/html";
+      await attachment.saveTx();
+    }
+    await fixture.save();
+    return fixture;
+  }
+
+  it("imports standalone HTML unchanged and persists snapshot text annotations", async function () {
+    const item = await paper(false);
+    const temporary = Zotero.getTempDirectory();
+    temporary.append(
+      "zfs-reading-" + Zotero.Utilities.randomString() + ".html",
+    );
+    const content =
+      '<!doctype html><meta charset="utf-8"><p>Unique selected words.</p><math xmlns="http://www.w3.org/1998/Math/MathML"><msup><mi>x</mi><mn>2</mn></msup></math>';
+    try {
+      await Zotero.File.putContentsAsync(temporary, content);
+      const attachment = await Zotero.Attachments.importFromFile({
+        file: temporary.path,
+        parentItemID: item.id,
+      });
+      created.push(attachment);
+      assert.equal(attachment.attachmentContentType, "text/html");
+      assert.equal(attachment.attachmentReaderType, "snapshot");
+      assert.equal(
+        await Zotero.File.getContentsAsync(await attachment.getFilePathAsync()),
+        content,
+      );
+      const saved = await annotation(item, "text/html");
+      saved.parentID = attachment.id;
+      await saved.saveTx();
+      const json = await Zotero.Annotations.toJSON(saved);
+      assert.equal(json.text, "Unique selected words.");
+      assert.equal(json.comment, "中文 annotation");
+      assert.equal(json.position.type, "CssSelector");
+      const reader = (await Zotero.Reader.open(attachment.id)) as any;
+      try {
+        await reader._initPromise;
+        const view = reader._internalReader._primaryView;
+        await view.initializedPromise;
+        const doc = view._iframeDocument;
+        assert.include(doc.body.textContent, "Unique selected words.");
+        assert.equal(doc.querySelectorAll("math msup").length, 1);
+      } finally {
+        reader.close();
+      }
+    } finally {
+      if (temporary.exists()) temporary.remove(false);
+    }
+  });
+
+  it("routes v3 HTML reading attachments to their exact documents and preserves original routing", async function () {
+    const { item, data } = await htmlPaper();
+    const mapping = mappingNote(item)!.mapping;
+    const targets = annotationTargets(mapping);
+    assert.equal(targets.length, 3);
+    for (const target of targets) {
+      assert.include(
+        target.attachmentKeys,
+        data.documents[target.mode].html_attachment_key,
+      );
+      assert.equal(
+        target.attachmentKeys.length,
+        target.mode === "english-original" ? 2 : 1,
+      );
+      const a = await annotation(item, "text/html");
+      a.parentID = Zotero.Items.getByLibraryAndKey(
+        item.libraryID,
+        data.documents[target.mode].html_attachment_key,
+      )!.id;
+      await a.saveTx();
+      assert.include(target.attachmentKeys, Zotero.Items.get(a.parentID!)!.key);
+    }
+  });
+
+  it("rejects mixed v3 fields, duplicate HTML keys, wrong MIME and changed live attachments", async function () {
+    const { item, data } = await htmlPaper();
+    const mixed = JSON.parse(JSON.stringify(data));
+    mixed.documents["english-original"].pdf_attachment_key = "PDF00001";
+    assert.throws(() => validateMapping(mixed), "wrong fields");
+    const duplicate = JSON.parse(JSON.stringify(data));
+    duplicate.documents["outline-expanded"].html_attachment_key =
+      duplicate.documents["english-original"].html_attachment_key;
+    assert.throws(() => validateMapping(duplicate), "duplicate");
+    const attachment = Zotero.Items.getByLibraryAndKey(
+      item.libraryID,
+      data.documents["english-original"].html_attachment_key,
+    )!;
+    attachment.attachmentContentType = "application/pdf";
+    await attachment.saveTx();
+    assert.throws(() => mappingNote(item), "阅读附件");
+  });
+
   it("accepts v2 PDFs and routes every reading mode plus original sources explicitly", async function () {
     const { item, data } = await pdfPaper();
     const mapping = mappingNote(item)!.mapping;
@@ -260,6 +364,62 @@ describe("mapped annotation synchronization", function () {
     for (const target of targets)
       for (const key of target.attachmentKeys) {
         const a = await annotation(item, "application/pdf");
+        a.parentID = Zotero.Items.getByLibraryAndKey(item.libraryID, key)!.id;
+        await a.saveTx();
+      }
+    const state = emptyAnnotationState();
+    const visited: string[] = [];
+    let failChinese = false;
+    const client = {
+      snapshot: async (id: string) => {
+        visited.push(id);
+        if (failChinese && id === "Chinese123")
+          throw new Error("offline fixture");
+        return {
+          blocks: [
+            {
+              block_id: id,
+              text: {
+                elements: [{ text_run: { content: "Unique selected words." } }],
+              },
+            },
+          ],
+        };
+      },
+    };
+    const service = new NativeAnnotationService(
+      { isAuthorized: () => true, missingAnnotationScopes: () => [] } as any,
+      client as any,
+      { load: async () => state, save: async () => undefined },
+    );
+    const first = await service.syncItem(item, mapping, true);
+    assert.isEmpty(first.errors);
+    assert.sameMembers(visited, ["Outline123", "Chinese123", "Example123"]);
+    const details = state.history[0].details;
+    assert.equal(details.length, 4);
+    assert.equal(
+      details.filter((d) => d.documentTitle === "英文全文").length,
+      2,
+    );
+    assert.isTrue(
+      details.every((d) => d.status === "matched" && !!d.documentUrl),
+    );
+    failChinese = true;
+    visited.length = 0;
+    const second = await service.syncItem(item, mapping, true);
+    assert.equal(second.outcome, "partial");
+    assert.include(second.errors[0], "中文全文");
+    assert.include(visited, "Example123");
+    assert.equal(state.history[0].details.length, 3);
+  });
+
+  it("syncs v3 HTML text to all three destinations and isolates one destination failure", async function () {
+    const { item } = await htmlPaper();
+    const mapping = mappingNote(item)!;
+    const targets = annotationTargets(mapping.mapping);
+    for (const target of targets)
+      for (const key of target.attachmentKeys) {
+        const a = await annotation(item, "text/html");
         a.parentID = Zotero.Items.getByLibraryAndKey(item.libraryID, key)!.id;
         await a.saveTx();
       }
